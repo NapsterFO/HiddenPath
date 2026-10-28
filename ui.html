@@ -67,7 +67,7 @@ main::-webkit-scrollbar { width: 10px; } main::-webkit-scrollbar-thumb { backgro
 h1 { font: 700 22px var(--num); letter-spacing: .04em; margin: 0 0 4px; }
 .sub { color: var(--muted); margin: 0 0 20px; }
 .grid { display: grid; gap: 16px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; backdrop-filter: blur(6px);
+.card { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; backdrop-filter: blur(6px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
 .card h3 { margin: 0 0 12px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
 .card h3 svg { color: var(--violet); width: 16px; height: 16px; }
@@ -142,8 +142,8 @@ select option { background: #1a1145; }
   background: rgba(255, 255, 255, .08); color: var(--muted); }
 .chip button:hover { background: var(--red); color: #fff; }
 .empty { color: var(--dim); padding: 8px 2px; }
-.keys { display: grid; gap: 8px; }
-.key { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+.keys { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }  /* строка ключа не шире карточки */
+.key { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; cursor: pointer; min-width: 0;
   background: rgba(8, 5, 30, .4); border: 1px solid var(--line); transition: .15s; }
 .key:hover { border-color: var(--line2); }
 .key.on { border-color: rgba(34, 228, 255, .55); background: linear-gradient(90deg, rgba(34, 228, 255, .12), rgba(143, 91, 255, .08));
@@ -152,7 +152,7 @@ select option { background: #1a1145; }
 .key.on .dot { border-color: var(--cyan); background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
 .key .t { flex: 1; min-width: 0; } .key .t b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .key .t small { color: var(--dim); }
-.badge { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; font-weight: 700; }
+.badge { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; font-weight: 700; flex: none; white-space: nowrap; }
 .badge.sub { color: var(--mag); background: rgba(255, 47, 214, .12); border: 1px solid rgba(255, 47, 214, .35); }
 .meter { height: 8px; border-radius: 99px; background: rgba(150, 125, 255, .15); overflow: hidden; margin-top: 8px; }
 .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--mag)); box-shadow: 0 0 10px var(--mag); transition: width .5s; }
