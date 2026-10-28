@@ -1,0 +1,15 @@
+# ключи VLESS, ссылка подписки и панели — только локально (вшиваются в exe при сборке)
+keys.txt
+keys.txt.*
+config.json
+
+# сборка
+build/
+dist/
+installer/
+__pycache__/
+*.pyc
+
+# резервные копии
+*.bak-*
+*.old.py

@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NapsterVPN</title>
+<style>
+:root {
+  --bg0: #0d0826; --bg1: #170f3f; --panel: rgba(38, 26, 96, .55); --panel2: rgba(55, 38, 130, .45);
+  --line: rgba(150, 125, 255, .18); --line2: rgba(150, 125, 255, .32);
+  --cyan: #22e4ff; --blue: #3b7bff; --mag: #ff2fd6; --pink: #ff4f9a; --violet: #8f5bff;
+  --green: #1fe0a4; --red: #ff4d6d; --amber: #ffc44d;
+  --text: #ece9ff; --muted: #9c95cf; --dim: #6c66a0;
+  --num: "Bahnschrift", "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--text); overflow: hidden;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(255, 47, 214, .18), transparent 60%),
+    radial-gradient(800px 600px at 10% 110%, rgba(34, 228, 255, .14), transparent 60%),
+    linear-gradient(160deg, var(--bg1), var(--bg0));
+  user-select: none;
+}
+body::before { /* лёгкая сетка, как на «дашбордах» */
+  content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .35;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 48px 48px; mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+/* окно без системной рамки: свой заголовок и тонкая рамка в цвет темы */
+.win { display: grid; grid-template-rows: 38px 1fr; height: 100%; border: 1px solid rgba(150, 125, 255, .35); position: relative; }
+.titlebar { display: flex; align-items: center; gap: 10px; padding-left: 14px; background: rgba(8, 5, 28, .75);
+  border-bottom: 1px solid var(--line); }
+.titlebar img { width: 20px; height: 20px; }
+.titlebar .name { font: 700 13px var(--num); letter-spacing: .1em; color: var(--muted); flex: 1; }
+.titlebar .name b { color: var(--text); }
+.wbtn { width: 46px; height: 37px; display: grid; place-items: center; color: var(--muted); cursor: pointer; transition: .12s; }
+.wbtn:hover { background: rgba(143, 91, 255, .2); color: #fff; }
+.wbtn.close:hover { background: #e2365b; }
+.wbtn svg.i { width: 15px; height: 15px; stroke-width: 1.8; }
+.grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; z-index: 10; color: var(--dim); }
+.grip svg { width: 100%; height: 100%; }
+.app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 0; position: relative; }
+
+/* ---------- боковая панель ---------- */
+nav { padding: 22px 14px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--line); background: rgba(10, 6, 34, .45); }
+.logo { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; }
+.logo .mark { width: 42px; height: 42px; border-radius: 12px; flex: none; filter: drop-shadow(0 0 10px rgba(59, 123, 255, .7)); }
+.logo b { font: 700 15px var(--num); letter-spacing: .08em; display: block; }
+.logo small { color: var(--muted); font-size: 11px; letter-spacing: .12em; }
+.nav-btn { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px; color: var(--muted);
+  cursor: pointer; border: 1px solid transparent; transition: .15s; font-weight: 600; }
+.nav-btn:hover { color: var(--text); background: rgba(143, 91, 255, .12); }
+.nav-btn.on { color: #fff; background: linear-gradient(90deg, rgba(34, 228, 255, .18), rgba(143, 91, 255, .12));
+  border-color: rgba(34, 228, 255, .35); box-shadow: inset 3px 0 0 var(--cyan), 0 0 16px rgba(34, 228, 255, .15); }
+.nav-btn.on svg { color: var(--cyan); filter: drop-shadow(0 0 6px var(--cyan)); }
+nav .spacer { flex: 1; }
+.ver { color: var(--dim); font-size: 11px; padding: 0 10px 10px; line-height: 1.6; }
+
+/* ---------- основная часть ---------- */
+main { overflow-y: auto; overflow-x: hidden; min-width: 0; padding: 24px 28px 28px; position: relative; }
+main::-webkit-scrollbar { width: 10px; } main::-webkit-scrollbar-thumb { background: rgba(143, 91, 255, .35); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+.page { display: none; animation: fade .2s ease; } .page.on { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+h1 { font: 700 22px var(--num); letter-spacing: .04em; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.grid { display: grid; gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.card h3 { margin: 0 0 12px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.card h3 svg { color: var(--violet); width: 16px; height: 16px; }
+.hint { color: var(--dim); font-size: 12px; margin-top: 10px; }
+
+/* ---------- главная ---------- */
+.hero { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+.gauge-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 22px; }
+.gauge { position: relative; width: 210px; height: 210px; }
+.gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.gauge .track { stroke: rgba(150, 125, 255, .14); }
+.gauge .arc { stroke: url(#g1); stroke-linecap: round; filter: drop-shadow(0 0 8px rgba(34, 228, 255, .8)) drop-shadow(0 0 18px rgba(255, 47, 214, .45)); transition: stroke-dashoffset .6s ease; }
+.gauge .halo { position: absolute; inset: 18px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(34, 228, 255, .16), rgba(143, 91, 255, .06) 60%, transparent 70%); }
+.gauge .mid { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.gauge .big { font: 700 46px/1 var(--num); text-shadow: 0 0 18px rgba(34, 228, 255, .7); }
+.gauge .lbl { font-size: 11px; letter-spacing: .16em; color: var(--muted); margin-top: 6px; text-transform: uppercase; }
+.gauge.busy svg { animation: spin 1.4s linear infinite; }
+@keyframes spin { to { transform: rotate(270deg); } }
+.state { margin-top: 14px; font-weight: 700; text-align: center; min-height: 22px; }
+.state.ok { color: var(--green); text-shadow: 0 0 10px rgba(31, 224, 164, .6); }
+.state.bad { color: var(--pink); } .state.busy { color: var(--cyan); }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 14px; }
+.stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; min-width: 0; }
+.stat .ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; }
+.stat .ic.c { background: rgba(34, 228, 255, .14); color: var(--cyan); box-shadow: 0 0 14px rgba(34, 228, 255, .25); }
+.stat .ic.m { background: rgba(255, 47, 214, .14); color: var(--mag); box-shadow: 0 0 14px rgba(255, 47, 214, .25); }
+.stat .ic.v { background: rgba(143, 91, 255, .18); color: #b79bff; box-shadow: 0 0 14px rgba(143, 91, 255, .3); }
+.stat .ic.g { background: rgba(31, 224, 164, .14); color: var(--green); box-shadow: 0 0 14px rgba(31, 224, 164, .25); }
+.stat small { color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; display: block; }
+.stat b { font: 600 15px var(--num); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ---------- кнопки, поля, переключатели ---------- */
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; color: #fff; font: 700 13px "Segoe UI";
+  padding: 11px 18px; border-radius: 999px; letter-spacing: .02em; transition: .15s; white-space: nowrap; }
+.btn:disabled { opacity: .4; cursor: default; filter: grayscale(.4); }
+.btn.cyan { background: linear-gradient(90deg, #19c8ff, var(--blue)); box-shadow: 0 0 18px rgba(34, 228, 255, .45); }
+.btn.mag { background: linear-gradient(90deg, var(--violet), var(--mag)); box-shadow: 0 0 18px rgba(255, 47, 214, .45); }
+.btn.red { background: linear-gradient(90deg, #ff5f7e, #e2365b); box-shadow: 0 0 16px rgba(255, 77, 109, .45); }
+.btn.ghost { background: rgba(143, 91, 255, .12); border: 1px solid var(--line2); color: var(--text); box-shadow: none; }
+.btn:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.12); }
+.btn.sm { padding: 8px 14px; font-size: 12px; }
+.ibtn { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; border: 1px solid var(--line2);
+  background: rgba(143, 91, 255, .1); color: var(--muted); cursor: pointer; flex: none; }
+.ibtn:hover { color: var(--red); border-color: rgba(255, 77, 109, .5); }
+.row { display: flex; gap: 10px; align-items: center; }
+.row + .row { margin-top: 10px; }
+input[type=text], input[type=password], select {
+  flex: 1; min-width: 0; background: rgba(8, 5, 30, .6); border: 1px solid var(--line2); color: var(--text); border-radius: 12px;
+  padding: 10px 14px; font: 14px "Segoe UI"; outline: none; transition: .15s; user-select: text; }
+input:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34, 228, 255, .15), 0 0 14px rgba(34, 228, 255, .25); }
+select option { background: #1a1145; }
+.toggles { display: grid; gap: 4px; }
+.tg { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; }
+.tg .t { flex: 1; } .tg .t small { display: block; color: var(--dim); font-size: 12px; }
+.tg svg.i { color: var(--muted); }
+.sw { width: 46px; height: 26px; border-radius: 99px; background: rgba(150, 125, 255, .2); position: relative; flex: none; transition: .2s; border: 1px solid var(--line2); }
+.sw::after { content: ""; position: absolute; width: 18px; height: 18px; top: 3px; left: 3px; border-radius: 50%; background: #cfc8ff; transition: .2s; }
+.tg.on .sw { background: linear-gradient(90deg, var(--cyan), var(--mag)); box-shadow: 0 0 14px rgba(255, 47, 214, .5); border-color: transparent; }
+.tg.on .sw::after { left: 23px; background: #fff; }
+.tg.on > svg.i { color: var(--cyan); }
+.tg.dis { opacity: .5; pointer-events: none; }
+
+/* ---------- списки сайтов и ключей ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; min-height: 40px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-radius: 99px; font-weight: 600;
+  background: rgba(34, 228, 255, .08); border: 1px solid rgba(34, 228, 255, .3); }
+.chip.m { background: rgba(255, 47, 214, .08); border-color: rgba(255, 47, 214, .35); }
+.chip svg.i { width: 14px; height: 14px; }
+.chip button { width: 22px; height: 22px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: rgba(255, 255, 255, .08); color: var(--muted); }
+.chip button:hover { background: var(--red); color: #fff; }
+.empty { color: var(--dim); padding: 8px 2px; }
+.keys { display: grid; gap: 8px; }
+.key { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+  background: rgba(8, 5, 30, .4); border: 1px solid var(--line); transition: .15s; }
+.key:hover { border-color: var(--line2); }
+.key.on { border-color: rgba(34, 228, 255, .55); background: linear-gradient(90deg, rgba(34, 228, 255, .12), rgba(143, 91, 255, .08));
+  box-shadow: 0 0 16px rgba(34, 228, 255, .2); }
+.key .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--dim); flex: none; }
+.key.on .dot { border-color: var(--cyan); background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+.key .t { flex: 1; min-width: 0; } .key .t b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.key .t small { color: var(--dim); }
+.badge { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; font-weight: 700; }
+.badge.sub { color: var(--mag); background: rgba(255, 47, 214, .12); border: 1px solid rgba(255, 47, 214, .35); }
+.meter { height: 8px; border-radius: 99px; background: rgba(150, 125, 255, .15); overflow: hidden; margin-top: 8px; }
+.meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--mag)); box-shadow: 0 0 10px var(--mag); transition: width .5s; }
+/* minmax(0, …): колонки не раздуваются от длинных кнопок и не вылезают за окно */
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+@media (max-width: 1060px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.btns .btn { flex: 1 1 auto; justify-content: center; }
+.key-card { display: flex; flex-direction: column; }
+.key-card .keys { flex: 1; align-content: start; }
+.tg-list .tg { padding: 14px 4px; }
+.tg-list .tg + .tg { border-top: 1px solid var(--line); }
+.tg-list .tg .t b { display: block; }
+.add-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* ---------- настройки ---------- */
+.seg { display: inline-flex; padding: 4px; border-radius: 14px; background: rgba(8, 5, 30, .5); border: 1px solid var(--line); gap: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 13px "Segoe UI"; padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+.seg button.on { color: #fff; background: linear-gradient(90deg, var(--violet), var(--mag)); box-shadow: 0 0 12px rgba(255, 47, 214, .45); }
+.opts { display: grid; gap: 8px; }
+.opt { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(8, 5, 30, .35); cursor: pointer; }
+.opt.on { border-color: rgba(255, 47, 214, .5); box-shadow: 0 0 14px rgba(255, 47, 214, .18); background: rgba(255, 47, 214, .07); }
+.opt .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--dim); flex: none; }
+.opt.on .dot { border-color: var(--mag); background: var(--mag); box-shadow: 0 0 10px var(--mag); }
+.opt b { display: block; } .opt small { color: var(--dim); }
+label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6px; letter-spacing: .04em; }
+
+/* ---------- журнал ---------- */
+.log { font: 12.5px/1.65 "Cascadia Mono", Consolas, monospace; background: rgba(5, 3, 20, .7); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px 14px; overflow-y: auto; user-select: text; white-space: pre-wrap; word-break: break-word; }
+.log .tm { color: var(--violet); } .log .er { color: var(--pink); } .log .ok { color: var(--green); }
+.log.mini { height: 170px; } .log.full { height: calc(100vh - 150px); }
+
+/* ---------- уведомления ---------- */
+.toasts { position: fixed; right: 20px; bottom: 20px; display: grid; gap: 8px; z-index: 9; }
+.toast { padding: 12px 16px; border-radius: 14px; background: rgba(23, 15, 63, .95); border: 1px solid rgba(34, 228, 255, .45);
+  box-shadow: 0 0 20px rgba(34, 228, 255, .25); max-width: 360px; animation: fade .2s; }
+.toast.err { border-color: rgba(255, 77, 109, .6); box-shadow: 0 0 20px rgba(255, 77, 109, .3); }
+
+@media (max-width: 900px) {
+  .hero, .two { grid-template-columns: 1fr; }
+  .app { grid-template-columns: 64px 1fr; }
+  nav .nav-btn span, .logo div, .ver { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22e4ff"/><stop offset=".55" stop-color="#8f5bff"/><stop offset="1" stop-color="#ff2fd6"/></linearGradient>
+  </defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9c-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L3 10.5l7 2.5 2.5 7z"/><path d="M10 13l11-10"/></symbol>
+  <symbol id="i-boot" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a5 5 0 0 1-.5-10A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/></symbol>
+  <symbol id="i-game" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 11v3M5.5 12.5h3M15 12h.01M18 13h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+  <symbol id="i-wmin" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-wmax" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></symbol>
+</svg>
+
+<div class="win">
+<div class="titlebar pywebview-drag-region" id="titlebar">
+  <img src="icon.png" alt="">
+  <div class="name"><b>Napster</b>VPN</div>
+  <div class="wbtn" data-w="min" title="Свернуть"><svg class="i"><use href="#i-wmin"/></svg></div>
+  <div class="wbtn" data-w="max" title="Развернуть"><svg class="i"><use href="#i-wmax"/></svg></div>
+  <div class="wbtn close" data-w="close" title="Свернуть в трей — программа продолжит работать"><svg class="i"><use href="#i-x"/></svg></div>
+</div>
+<div class="app">
+  <nav>
+    <div class="logo"><img class="mark" src="icon.png" alt="">
+      <div><b>NAPSTER</b><small>VPN</small></div></div>
+    <div class="nav-btn on" data-p="home"><svg class="i"><use href="#i-home"/></svg><span>Главная</span></div>
+    <div class="nav-btn" data-p="sites"><svg class="i"><use href="#i-globe"/></svg><span>Сайты</span></div>
+    <div class="nav-btn" data-p="vpn"><svg class="i"><use href="#i-shield"/></svg><span>Через VPN</span></div>
+    <div class="nav-btn" data-p="settings"><svg class="i"><use href="#i-sliders"/></svg><span>Настройки</span></div>
+    <div class="nav-btn" data-p="log"><svg class="i"><use href="#i-term"/></svg><span>Журнал</span></div>
+    <div class="spacer"></div>
+    <div class="ver" id="ver"></div>
+    <div class="nav-btn" id="exit"><svg class="i"><use href="#i-power"/></svg><span>Выход</span></div>
+  </nav>
+
+  <main>
+    <!-- ГЛАВНАЯ -->
+    <section class="page on" id="p-home">
+      <h1>Панель управления</h1>
+      <p class="sub">Обход блокировок zapret и ваш VLESS-сервер для выбранных сайтов</p>
+      <div class="hero">
+        <div class="card gauge-card">
+          <div class="gauge" id="gauge">
+            <div class="halo"></div>
+            <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52" stroke-width="9" fill="none"/>
+              <circle class="arc" id="arc" cx="60" cy="60" r="52" stroke-width="9" fill="none" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+            <div class="mid"><div class="big" id="g-big">—</div><div class="lbl" id="g-lbl">запуск</div></div>
+          </div>
+          <div class="state busy" id="state">Запуск…</div>
+        </div>
+        <div>
+          <div class="stats">
+            <div class="stat"><div class="ic c"><svg class="i"><use href="#i-zap"/></svg></div><div style="min-width:0"><small>Стратегия</small><b id="s-strat">—</b></div></div>
+            <div class="stat"><div class="ic m"><svg class="i"><use href="#i-shield"/></svg></div><div style="min-width:0"><small>VLESS</small><b id="s-vless">выключен</b></div></div>
+            <div class="stat"><div class="ic v"><svg class="i"><use href="#i-globe"/></svg></div><div style="min-width:0"><small>Сайты</small><b id="s-sites">—</b></div></div>
+            <div class="stat"><div class="ic g"><svg class="i"><use href="#i-cloud"/></svg></div><div style="min-width:0"><small>Трафик VPN</small><b id="s-traffic">—</b></div></div>
+          </div>
+          <div class="card" style="padding:14px 18px">
+            <div class="actions">
+              <button class="btn cyan act" data-a="check"><svg class="i"><use href="#i-play"/></svg>Проверить и запустить</button>
+              <button class="btn mag act" data-a="update"><svg class="i"><use href="#i-refresh"/></svg>Обновить</button>
+              <button class="btn red" data-a="stop"><svg class="i"><use href="#i-stop"/></svg>Остановить</button>
+            </div>
+            <div class="toggles" style="margin-top:8px">
+              <div class="tg" id="t-auto"><svg class="i"><use href="#i-boot"/></svg><div class="t">Запускать вместе с Windows<small>Сразу в фоне — значок у часов</small></div><div class="sw"></div></div>
+              <div class="tg" id="t-vless"><svg class="i"><use href="#i-shield"/></svg><div class="t">Сайты из списка — через мой сервер<small>Остальной интернет идёт напрямую</small></div><div class="sw"></div></div>
+              <div class="tg" id="t-tg"><svg class="i"><use href="#i-send"/></svg><div class="t">Telegram-прокси<small>tg-ws-proxy для Telegram Desktop</small></div><div class="sw"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3><svg class="i"><use href="#i-activity"/></svg>Последние события</h3>
+        <div class="log mini" id="log-mini"></div>
+      </div>
+    </section>
+
+    <!-- САЙТЫ -->
+    <section class="page" id="p-sites">
+      <h1>Сайты для обхода</h1>
+      <p class="sub">Добавленные домены обходят блокировку провайдера через zapret</p>
+      <div class="card">
+        <div class="row">
+          <input type="text" id="z-in" placeholder="Домен или ссылка: rutracker.org, https://site.com/page …">
+          <button class="btn cyan" id="z-add"><svg class="i"><use href="#i-plus"/></svg>Добавить</button>
+          <button class="btn ghost" id="z-open"><svg class="i"><use href="#i-folder"/></svg>Файл</button>
+        </div>
+        <div class="chips" id="z-list"></div>
+        <div class="hint">Поддомены добавлять не нужно. Если сайт сам не пускает из России (403, Access Denied), добавьте его во вкладку «Через VPN».</div>
+      </div>
+    </section>
+
+    <!-- ЧЕРЕЗ VPN -->
+    <section class="page" id="p-vpn">
+      <h1>Через VPN</h1>
+      <p class="sub" id="vpn-sub">Через ваш сервер идут только сайты из списка, всё остальное — напрямую</p>
+      <div class="two">
+        <div class="card">
+          <h3><svg class="i"><use href="#i-link"/></svg>Подписка 3x-ui</h3>
+          <div class="row">
+            <input type="password" id="sub-in" placeholder="https://… ссылка подписки">
+            <button class="btn ghost sm" id="sub-save">Сохранить</button>
+          </div>
+          <div class="hint" id="sub-info">—</div>
+          <div class="meter"><i id="sub-meter"></i></div>
+          <div class="btns">
+            <button class="btn mag sm act" data-a="sub_refresh"><svg class="i"><use href="#i-refresh"/></svg>Обновить ключи</button>
+            <button class="btn cyan sm act" data-a="vless_check"><svg class="i"><use href="#i-activity"/></svg>Проверить сервер</button>
+            <button class="btn ghost sm" data-a="open_panel" id="panel-btn" hidden><svg class="i"><use href="#i-link"/></svg>Панель 3x-ui</button>
+          </div>
+        </div>
+        <div class="card key-card">
+          <h3><svg class="i"><use href="#i-key"/></svg>Ключи</h3>
+          <div class="keys" id="keys"></div>
+          <div class="row" style="margin-top:12px">
+            <input type="password" id="key-in" placeholder="vless://… добавить ключ вручную">
+            <button class="btn ghost sm" id="key-add"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="card tg-list" style="margin-top:16px">
+        <div class="tg" id="t-vless2" style="padding-top:0"><svg class="i"><use href="#i-shield"/></svg><div class="t"><b>Пускать сайты из списка через мой сервер</b><small>Браузеры и программы, использующие системный прокси Windows</small></div><div class="sw"></div></div>
+        <div class="tg" id="t-vall"><svg class="i"><use href="#i-globe"/></svg><div class="t"><b>Весь интернет через VLESS, кроме RU</b><small>Российские сайты (.ru, .рф, Яндекс, VK, Госуслуги, банки) и локальная сеть — напрямую</small></div><div class="sw"></div></div>
+        <div class="row add-row">
+          <input type="text" id="v-in" placeholder="Домен, ссылка или IP: intel.com, https://site.com/page, https://1.2.3.4:8080/…">
+          <button class="btn mag" id="v-add"><svg class="i"><use href="#i-plus"/></svg>Добавить</button>
+        </div>
+        <div class="chips" id="v-list"></div>
+      </div>
+      <div class="card tg-list" style="margin-top:16px">
+        <div class="tg" id="t-vtun" style="padding-top:0"><svg class="i"><use href="#i-apps"/></svg><div class="t"><b>Программы через VPN</b><small>Telegram, Claude, ChatGPT и другие из списка ниже — целиком через сервер, даже если они не видят системный прокси</small></div><div class="sw"></div></div>
+        <div class="row add-row">
+          <input type="text" id="a-in" placeholder="Имя программы или путь к .exe: Telegram, Discord, AyuGram.exe">
+          <button class="btn mag" id="a-add"><svg class="i"><use href="#i-plus"/></svg>Добавить</button>
+        </div>
+        <div class="chips" id="a-list"></div>
+        <div class="hint">Работает через виртуальный сетевой адаптер. Другие VPN в режиме TUN (Happ, v2RayTun, Amnezia) на это время выключите. Имя — как у процесса в диспетчере задач, без .exe, регистр важен.</div>
+      </div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section class="page" id="p-settings">
+      <h1>Настройки</h1>
+      <p class="sub">То же, что меню service.bat. Сохраняются и переживают обновления релиза</p>
+      <div class="two">
+        <div class="card">
+          <h3><svg class="i"><use href="#i-game"/></svg>Game Filter</h3>
+          <div class="seg" id="game"></div>
+          <div class="row" style="margin-top:4px">
+            <div style="flex:1"><label class="f">Порты TCP</label><input type="text" id="tcp"></div>
+            <div style="flex:1"><label class="f">Порты UDP</label><input type="text" id="udp"></div>
+          </div>
+          <div class="hint">Пример: 1024-1934,1936-65535</div>
+          <h3 style="margin-top:22px"><svg class="i"><use href="#i-refresh"/></svg>Auto-Update Check</h3>
+          <div class="tg" id="t-upd" style="padding:0"><div class="t">Проверка обновлений внутри .bat<small>Обычно не нужна — есть кнопка «Обновить»</small></div><div class="sw"></div></div>
+        </div>
+        <div class="card">
+          <h3><svg class="i"><use href="#i-server"/></svg>IPSet Filter</h3>
+          <div class="opts" id="ipset"></div>
+          <button class="btn ghost sm act" data-a="ipset_update" style="margin-top:12px"><svg class="i"><use href="#i-cloud"/></svg>Обновить список IPSet</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3><svg class="i"><use href="#i-zap"/></svg>Replace active fakes</h3>
+        <div class="two">
+          <div><label class="f">Discord UDP</label><select id="fake_discord"></select></div>
+          <div><label class="f">Game UDP</label><select id="fake_game"></select></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;text-align:right"><button class="btn cyan act" id="apply"><svg class="i"><use href="#i-check"/></svg>Применить и перезапустить обход</button></div>
+    </section>
+
+    <!-- ЖУРНАЛ -->
+    <section class="page" id="p-log">
+      <h1>Журнал</h1>
+      <p class="sub">Что делает программа</p>
+      <div class="log full" id="log-full"></div>
+    </section>
+  </main>
+</div>
+<div class="grip" id="grip" title="Изменить размер"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 8L8 16M16 12l-4 4"/></svg></div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const icon = (n, cls = "i") => `<svg class="${cls}"><use href="#i-${n}"/></svg>`;
+let api = null, S = {}, logN = 0, settings = null;
+
+// ---------- демо-режим для просмотра в обычном браузере ----------
+function demoApi() {
+  const st = {status: "Работает: general (ALT).bat", busy: false, running: true, score: 6, total: 6,
+    strategy: "general (ALT).bat", versions: {zapret: "1.10.4", tg: "v1.11.2", xray: "v26.10.21"},
+    autostart: true, tg: false, vless: true, vless_loc: "FI", sites_n: 3, traffic: "458.8 ГБ"};
+  const log = [["12:40:01", "Запускаю сохранённую стратегию: general (ALT).bat"], ["12:40:06", "Работает (6 из 6)."],
+    ["12:40:07", "Подписка обновлена: ключей 1, без изменений."], ["12:40:09", "VLESS включён (napster-napsterVPN). Через сервер: intel.com"],
+    ["12:41:30", "Сервер работает: выход в интернет с IP 203.0.113.10 (страна FI)."]];
+  const z = ["rutracker.org", "nnmclub.to", "linkedin.com"], v = ["intel.com", "chatgpt.com"], ap = ["Telegram", "claude", "ChatGPT"];
+  const ok = (m) => Promise.resolve({ok: true, msg: m});
+  return {
+    poll: n => Promise.resolve({...st, log: log.slice(n), log_n: log.length}),
+    sites: k => Promise.resolve(k === "zapret" ? z : k === "apps" ? ap : v),
+    vpn: () => Promise.resolve({keys: [{title: "my-server (203.0.113.10)", sub: true}, {title: "Запасной (203.0.113.9)", sub: false}],
+      active: 0, sub_set: true, sub_text: "Ключей из подписки: 1, обновлена 28.10 13:10", used_gb: 458.8, total_gb: 0, panel: true}),
+    settings: () => Promise.resolve({game_mode: "disabled", game_tcp: "1024-65535", game_udp: "1024-65535", ipset: "none",
+      check_updates: false, fake_discord: "quic_initial_www_google_com", fake_game: "stun", fakes: ["quic_initial_www_google_com", "stun", "stun2"]}),
+    action: (a) => ok("демо: " + a), set_flag: (k, v) => { st[k] = v; return ok(""); },
+    add_sites: (k, t) => { (k === "zapret" ? z : k === "apps" ? ap : v).push(...t.split(/[\s,;]+/).filter(Boolean)); return ok("Добавлено"); },
+    del_site: (k, s) => { const a = k === "zapret" ? z : k === "apps" ? ap : v; a.splice(a.indexOf(s), 1); return ok("Удалено"); },
+    save_sub: () => ok("Подписка сохранена"), add_key: () => ok("Ключ добавлен"), pick_key: () => ok(""), del_key: () => ok(""),
+    apply_settings: () => ok("Настройки сохранены"),
+    win: () => ok(""), resize: () => ok(""),
+  };
+}
+
+// ---------- общее ----------
+function toast(msg, err) {
+  if (!msg) return;
+  const t = document.createElement("div"); t.className = "toast" + (err ? " err" : ""); t.textContent = msg;
+  $("#toasts").append(t); setTimeout(() => t.remove(), err ? 6000 : 3500);
+}
+async function call(fn, ...args) {
+  const r = await api[fn](...args);
+  if (r && r.msg) toast(r.msg, !r.ok);
+  refreshPage(); return r;
+}
+function setTg(el, on, dis) { el.classList.toggle("on", !!on); el.classList.toggle("dis", !!dis); }
+function logLine([t, m]) {
+  const cls = /ошибк|не удал|не отвеч|не работает|не запуст/i.test(m) ? "er" : /работает|включён|обновлен|установлен|добавлен/i.test(m) ? "ok" : "";
+  return `<div><span class="tm">${t}</span> <span class="${cls}">${esc(m)}</span></div>`;
+}
+
+// ---------- опрос состояния ----------
+async function poll() {
+  try {
+    S = await api.poll(logN);
+    if (S.log.length) {
+      const html = S.log.map(logLine).join("");
+      for (const id of ["#log-mini", "#log-full"]) { const el = $(id); el.insertAdjacentHTML("beforeend", html); el.scrollTop = 1e9; }
+      logN = S.log_n;
+    }
+    renderHome();
+  } catch (e) { /* окно закрывается */ }
+}
+function renderHome() {
+  const g = $("#gauge"), arc = $("#arc"), st = $("#state");
+  g.classList.toggle("busy", S.busy);
+  const frac = S.busy ? .3 : S.running ? (S.total ? S.score / S.total : 1) : 0;
+  arc.style.strokeDashoffset = 326.7 * (1 - frac);
+  $("#g-big").textContent = S.busy ? "…" : S.running ? `${S.score}/${S.total}` : "OFF";
+  $("#g-lbl").textContent = S.busy ? "работаю" : S.running ? "обход включён" : "обход выключен";
+  st.textContent = S.status; st.className = "state " + (S.busy ? "busy" : S.running ? "ok" : "bad");
+  $("#s-strat").textContent = S.strategy || "не выбрана";
+  $("#s-vless").textContent = S.vless ? `включён${S.vless_loc ? " · " + S.vless_loc : ""}` : "выключен";
+  $("#s-sites").textContent = `${S.sites_n} свои · ${S.vpn_sites_n ?? 0} через VPN`.replace("undefined", "0");
+  $("#s-traffic").textContent = S.traffic || "—";
+  setTg($("#t-auto"), S.autostart); setTg($("#t-vless"), S.vless, S.busy); setTg($("#t-vless2"), S.vless, S.busy); setTg($("#t-vall"), S.vless && S.vless_all, S.busy); setTg($("#t-vtun"), S.vless && S.vless_tun, S.busy);
+  $("#vpn-sub").textContent = S.vless && S.vless_all
+    ? "Через ваш сервер идёт весь интернет, кроме российских сайтов"
+    : "Через ваш сервер идут только сайты из списка, всё остальное — напрямую"; setTg($("#t-tg"), S.tg, S.busy);
+  document.querySelectorAll(".act").forEach(b => b.disabled = S.busy);
+  const v = S.versions || {};
+  $("#ver").innerHTML = `zapret ${esc(v.zapret || "—")}<br>Xray ${esc(v.xray || "—")}` + (v.tg ? `<br>tg-ws-proxy ${esc(v.tg)}` : "");
+}
+
+// ---------- страницы ----------
+let page = "home";
+function refreshPage() {
+  if (page === "sites") renderSites("zapret", "#z-list", "");
+  if (page === "vpn") { renderSites("vpn", "#v-list", "m"); renderSites("apps", "#a-list", ""); renderVpn(); }
+  if (page === "settings" && !settings) renderSettings();
+}
+async function renderSites(kind, box, cls) {
+  const list = await api.sites(kind);
+  $(box).innerHTML = list.length ? list.map(s => `<span class="chip ${cls}">${icon(kind === "apps" ? "apps" : "globe")}${esc(s)}<button title="Удалить" data-k="${kind}" data-s="${esc(s)}">${icon("x")}</button></span>`).join("")
+    : `<div class="empty">Пока пусто — добавьте ${kind === "apps" ? "первую программу" : "первый сайт"}.</div>`;
+}
+async function renderVpn() {
+  const v = await api.vpn();
+  $("#keys").innerHTML = v.keys.length ? v.keys.map((k, i) => `<div class="key ${i === v.active ? "on" : ""}" data-i="${i}"><span class="dot"></span>
+      <div class="t"><b>${esc(k.title)}</b><small>${i === v.active ? "активный" : "нажмите, чтобы выбрать"}</small></div>
+      ${k.sub ? '<span class="badge sub">подписка</span>' : `<button class="ibtn" data-del="${i}" title="Удалить">${icon("trash")}</button>`}</div>`).join("")
+    : `<div class="empty">Ключей нет — вставьте подписку или ключ.</div>`;
+  $("#sub-info").textContent = v.sub_text;
+  $("#panel-btn").hidden = !v.panel;
+  $("#sub-meter").style.width = v.total_gb ? Math.min(100, v.used_gb / v.total_gb * 100) + "%" : (v.used_gb ? "100%" : "0");
+}
+const GAME = [["disabled", "Откл."], ["all", "TCP + UDP"], ["tcp", "TCP"], ["udp", "UDP"]];
+const IPSET = [["none", "none", "Только домены из списков"], ["any", "any", "Для всех IP — агрессивно, может ломать сайты и игры"], ["loaded", "loaded", "По списку IP из релиза"]];
+async function renderSettings() {
+  settings = await api.settings();
+  const s = settings;
+  $("#game").innerHTML = GAME.map(([k, t]) => `<button data-g="${k}" class="${s.game_mode === k ? "on" : ""}">${t}</button>`).join("");
+  $("#tcp").value = s.game_tcp; $("#udp").value = s.game_udp;
+  $("#ipset").innerHTML = IPSET.map(([k, t, d]) => `<div class="opt ${s.ipset === k ? "on" : ""}" data-ip="${k}"><span class="dot"></span><div><b>${t}</b><small>${d}</small></div></div>`).join("");
+  setTg($("#t-upd"), s.check_updates);
+  for (const k of ["fake_discord", "fake_game"])
+    $("#" + k).innerHTML = `<option value="">(не менять)</option>` + s.fakes.map(f => `<option ${f === s[k] ? "selected" : ""}>${esc(f)}</option>`).join("");
+}
+
+// ---------- события ----------
+document.querySelectorAll(".nav-btn[data-p]").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".nav-btn").forEach(x => x.classList.toggle("on", x === b));
+  page = b.dataset.p; settings = null;
+  document.querySelectorAll(".page").forEach(p => p.classList.toggle("on", p.id === "p-" + page));
+  refreshPage();
+});
+$("#exit").onclick = () => api.action("exit");
+document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call("action", b.dataset.a));
+$("#t-auto").onclick = () => call("set_flag", "autostart", !S.autostart);
+$("#t-tg").onclick = () => call("set_flag", "tg", !S.tg);
+$("#t-vless").onclick = $("#t-vless2").onclick = () => call("set_flag", "vless", !S.vless);
+$("#t-vall").onclick = () => call("set_flag", "vless_all", !(S.vless && S.vless_all));  // включение заодно включит VLESS
+$("#t-vtun").onclick = () => call("set_flag", "vless_tun", !(S.vless && S.vless_tun));
+function addSites(kind, inp) { const t = $(inp).value.trim(); if (!t) return; call("add_sites", kind, t).then(r => { if (r.ok) $(inp).value = ""; }); }
+// onkeydown, вернувший false, отменяет нажатие — поэтому if, а не &&
+$("#z-add").onclick = () => addSites("zapret", "#z-in"); $("#z-in").onkeydown = e => { if (e.key === "Enter") addSites("zapret", "#z-in"); };
+$("#a-add").onclick = () => addSites("apps", "#a-in"); $("#a-in").onkeydown = e => { if (e.key === "Enter") addSites("apps", "#a-in"); };
+$("#v-add").onclick = () => addSites("vpn", "#v-in"); $("#v-in").onkeydown = e => { if (e.key === "Enter") addSites("vpn", "#v-in"); };
+$("#z-open").onclick = () => call("action", "open_list");
+document.addEventListener("click", e => {
+  const d = e.target.closest(".chip button"); if (d) return call("del_site", d.dataset.k, d.dataset.s);
+  const del = e.target.closest("[data-del]");
+  if (del) { e.stopPropagation(); if (confirm("Удалить этот ключ?")) call("del_key", +del.dataset.del); return; }
+  const k = e.target.closest(".key"); if (k) return call("pick_key", +k.dataset.i);
+  const g = e.target.closest("[data-g]"); if (g && settings) { settings.game_mode = g.dataset.g; document.querySelectorAll("[data-g]").forEach(x => x.classList.toggle("on", x === g)); }
+  const ip = e.target.closest("[data-ip]"); if (ip && settings) { settings.ipset = ip.dataset.ip; document.querySelectorAll("[data-ip]").forEach(x => x.classList.toggle("on", x === ip)); }
+});
+$("#t-upd").onclick = () => { if (settings) { settings.check_updates = !settings.check_updates; setTg($("#t-upd"), settings.check_updates); } };
+$("#apply").onclick = () => {
+  if (!settings) return;
+  const s = {...settings, game_tcp: $("#tcp").value, game_udp: $("#udp").value,
+    fake_discord: $("#fake_discord").value || null, fake_game: $("#fake_game").value || null};
+  call("apply_settings", s);
+};
+$("#sub-save").onclick = () => call("save_sub", $("#sub-in").value.trim()).then(r => { if (r.ok) $("#sub-in").value = ""; });
+$("#key-add").onclick = () => call("add_key", $("#key-in").value.trim()).then(r => { if (r.ok) $("#key-in").value = ""; });
+
+// ---------- своё окно: кнопки заголовка и изменение размера ----------
+document.querySelectorAll("[data-w]").forEach(b => b.onclick = () => api && api.win(b.dataset.w));
+$("#titlebar").ondblclick = e => { if (!e.target.closest(".wbtn") && api) api.win("max"); };
+$("#grip").onmousedown = e => {
+  e.preventDefault();
+  const sx = e.screenX, sy = e.screenY, w0 = window.outerWidth, h0 = window.outerHeight;
+  let pending = null;
+  const move = ev => {
+    if (!pending) requestAnimationFrame(() => { api.resize(pending[0], pending[1]); pending = null; });
+    pending = [Math.max(880, w0 + ev.screenX - sx), Math.max(620, h0 + ev.screenY - sy)];
+  };
+  const up = () => { removeEventListener("mousemove", move); removeEventListener("mouseup", up); };
+  addEventListener("mousemove", move); addEventListener("mouseup", up);
+};
+
+// ---------- старт ----------
+function start(a) { api = a; poll(); setInterval(poll, 700); setInterval(() => page === "vpn" && renderVpn(), 5000); }
+if (window.pywebview && window.pywebview.api) start(window.pywebview.api);
+else window.addEventListener("pywebviewready", () => start(window.pywebview.api));
+setTimeout(() => { if (!api) start(demoApi()); }, 600);  // открыт в обычном браузере — демо
+</script>
+</body>
+</html>
