@@ -13,3 +13,5 @@ __pycache__/
 # резервные копии
 *.bak-*
 *.old.py
+*.spec
+screenshots-src/

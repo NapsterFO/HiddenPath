@@ -1,5 +1,5 @@
 """
-NapsterVPN — оболочка над flowseal/zapret-discord-youtube для Windows.
+Hidden Path — обход блокировок для Windows: zapret (Flowseal) + свой сервер VLESS (Xray).
 
 При запуске:
   1. если релиза ещё нет — скачивает последний с GitHub;
@@ -46,9 +46,9 @@ from pathlib import Path
 
 REPO = "Flowseal/zapret-discord-youtube"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
-APP_NAME = "NapsterVPN"
-APP_TITLE = "NapsterVPN"  # заголовок окна; по нему второй запуск находит первый
-TASK = "NapsterVPNAutostart"
+APP_NAME = "HiddenPath"
+APP_TITLE = "Hidden Path"  # заголовок окна; по нему второй запуск находит первый
+TASK = "HiddenPathAutostart"
 
 TG_REPO = "Flowseal/tg-ws-proxy"
 TG_API = f"https://api.github.com/repos/{TG_REPO}/releases/latest"
@@ -80,11 +80,11 @@ NO_FAKE = "(не менять)"
 
 XRAY_API = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
 XRAY_ASSET = "Xray-windows-64.zip"
-XRAY_BIN = "zm-xray.exe"  # своё имя, чтобы не убить чужой xray (v2rayN и т.п.)
+XRAY_BIN = "hp-xray.exe"  # своё имя, чтобы не убить чужой xray (v2rayN и т.п.)
 # не 10808/10809: их по умолчанию занимают v2rayN и другие клиенты Xray
-XRAY_SOCKS, XRAY_HTTP = 17808, 17809
-XRAY_TEST = 17810  # всё с этого порта — только через сервер (кнопка «Проверить сервер»)
-TUN_NAME = "NapsterVPN"
+XRAY_SOCKS, XRAY_HTTP = 17818, 17819
+XRAY_TEST = 17820  # всё с этого порта — только через сервер (кнопка «Проверить сервер»)
+TUN_NAME = "HiddenPath"
 # режим «Программы через VPN»: имена процессов без .exe (регистр важен)
 DEFAULT_APPS = ["Telegram", "AyuGram", "claude", "Claude", "ChatGPT"]
 PROXY_ADDR = f"127.0.0.1:{XRAY_HTTP}"
@@ -1460,7 +1460,7 @@ class Api:
             return
         M = pystray.MenuItem
         menu = pystray.Menu(
-            M("Открыть NapsterVPN", lambda: self._show(), default=True),
+            M("Открыть Hidden Path", lambda: self._show(), default=True),
             pystray.Menu.SEPARATOR,
             M("Обход блокировок", lambda: self._tray_bypass(), checked=lambda _: self._running),
             M("Сайты через мой сервер", lambda: self._tray_vless(),
@@ -1570,7 +1570,7 @@ class Api:
 
     def _heal_autostart(self):
         """Автозапуск включён по умолчанию; если задача пропала или ведёт на старый
-        путь (переезд из ZapretManager) — создать заново."""
+        путь (программу переустановили в другую папку) — создать заново."""
         if not getattr(sys, "frozen", False) or not self._eng.cfg.get("autostart", True):
             return
         if not autostart_points_here():
@@ -1661,7 +1661,7 @@ class Api:
         if name == "open_panel":
             url = e.cfg.get("panel_url", "")
             if not re.match(r"^https?://\S+$", url):
-                return self._err("Ссылка на панель 3x-ui не задана.")
+                return self._err("Вставьте ссылку на свою панель 3x-ui в поле ниже.")
             os.startfile(url)
             return self._ok()
         if name == "exit":
@@ -1793,6 +1793,14 @@ class Api:
             if e.xray_running() and not self._work(e.vless_apply):
                 self._add_log("Список применится при следующем запуске VLESS.")
 
+    def save_panel(self, url):
+        url = (url or "").strip()
+        if url and not re.match(r"^https?://\S+$", url):
+            return self._err("Ссылка на панель должна начинаться с https://")
+        self._eng.cfg["panel_url"] = url
+        self._eng.save()
+        return self._ok("Ссылка на панель сохранена" if url else "Ссылка на панель убрана")
+
     def save_sub(self, url):
         url = (url or "").strip()
         if url and not re.match(r"^https?://\S+$", url):
@@ -1920,7 +1928,7 @@ def main():
         except Exception:
             sys.exit(1)
         sys.exit(0)
-    ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\NapsterVPNMutex")
+    ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\HiddenPathMutex")
     if ctypes.windll.kernel32.GetLastError() == 183:  # уже запущено — показать то окно
         h = ctypes.windll.user32.FindWindowW(None, APP_TITLE)
         if h:

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NapsterVPN</title>
+<title>Hidden Path</title>
 <style>
 :root {
   --bg0: #0d0826; --bg1: #170f3f; --panel: rgba(38, 26, 96, .55); --panel2: rgba(55, 38, 130, .45);
@@ -14,6 +14,7 @@
   --num: "Bahnschrift", "Segoe UI", sans-serif;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* иначе display у .btn перебивает hidden */
 html, body { height: 100%; margin: 0; }
 body {
   font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--text); overflow: hidden;
@@ -236,7 +237,7 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
 <div class="win">
 <div class="titlebar pywebview-drag-region" id="titlebar">
   <img src="icon.png" alt="">
-  <div class="name"><b>Napster</b>VPN</div>
+  <div class="name"><b>Hidden</b> Path</div>
   <div class="wbtn" data-w="min" title="Свернуть"><svg class="i"><use href="#i-wmin"/></svg></div>
   <div class="wbtn" data-w="max" title="Развернуть"><svg class="i"><use href="#i-wmax"/></svg></div>
   <div class="wbtn close" data-w="close" title="Свернуть в трей — программа продолжит работать"><svg class="i"><use href="#i-x"/></svg></div>
@@ -244,7 +245,7 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
 <div class="app">
   <nav>
     <div class="logo"><img class="mark" src="icon.png" alt="">
-      <div><b>NAPSTER</b><small>VPN</small></div></div>
+      <div><b>HIDDEN</b><small>PATH</small></div></div>
     <div class="nav-btn on" data-p="home"><svg class="i"><use href="#i-home"/></svg><span>Главная</span></div>
     <div class="nav-btn" data-p="sites"><svg class="i"><use href="#i-globe"/></svg><span>Сайты</span></div>
     <div class="nav-btn" data-p="vpn"><svg class="i"><use href="#i-shield"/></svg><span>Через VPN</span></div>
@@ -322,6 +323,10 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
           <div class="row">
             <input type="password" id="sub-in" placeholder="https://… ссылка подписки">
             <button class="btn ghost sm" id="sub-save">Сохранить</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="panel-in" placeholder="https://… своя панель 3x-ui">
+            <button class="btn ghost sm" id="panel-save">Сохранить</button>
           </div>
           <div class="hint" id="sub-info">—</div>
           <div class="meter"><i id="sub-meter"></i></div>
@@ -416,7 +421,7 @@ function demoApi() {
     strategy: "general (ALT).bat", versions: {zapret: "1.10.4", tg: "v1.11.2", xray: "v26.10.21"},
     autostart: true, tg: false, vless: true, vless_loc: "FI", sites_n: 3, traffic: "458.8 ГБ"};
   const log = [["12:40:01", "Запускаю сохранённую стратегию: general (ALT).bat"], ["12:40:06", "Работает (6 из 6)."],
-    ["12:40:07", "Подписка обновлена: ключей 1, без изменений."], ["12:40:09", "VLESS включён (napster-napsterVPN). Через сервер: intel.com"],
+    ["12:40:07", "Подписка обновлена: ключей 1, без изменений."], ["12:40:09", "VLESS включён (my-server). Через сервер: intel.com"],
     ["12:41:30", "Сервер работает: выход в интернет с IP 203.0.113.10 (страна FI)."]];
   const z = ["rutracker.org", "nnmclub.to", "linkedin.com"], v = ["intel.com", "chatgpt.com"], ap = ["Telegram", "claude", "ChatGPT"];
   const ok = (m) => Promise.resolve({ok: true, msg: m});
@@ -424,13 +429,13 @@ function demoApi() {
     poll: n => Promise.resolve({...st, log: log.slice(n), log_n: log.length}),
     sites: k => Promise.resolve(k === "zapret" ? z : k === "apps" ? ap : v),
     vpn: () => Promise.resolve({keys: [{title: "my-server (203.0.113.10)", sub: true}, {title: "Запасной (203.0.113.9)", sub: false}],
-      active: 0, sub_set: true, sub_text: "Ключей из подписки: 1, обновлена 28.10 13:10", used_gb: 458.8, total_gb: 0, panel: true}),
+      active: 0, sub_set: true, sub_text: "Ключей из подписки: 1, обновлена 28.10 13:10", used_gb: 458.8, total_gb: 0, panel: false}),
     settings: () => Promise.resolve({game_mode: "disabled", game_tcp: "1024-65535", game_udp: "1024-65535", ipset: "none",
       check_updates: false, fake_discord: "quic_initial_www_google_com", fake_game: "stun", fakes: ["quic_initial_www_google_com", "stun", "stun2"]}),
     action: (a) => ok("демо: " + a), set_flag: (k, v) => { st[k] = v; return ok(""); },
     add_sites: (k, t) => { (k === "zapret" ? z : k === "apps" ? ap : v).push(...t.split(/[\s,;]+/).filter(Boolean)); return ok("Добавлено"); },
     del_site: (k, s) => { const a = k === "zapret" ? z : k === "apps" ? ap : v; a.splice(a.indexOf(s), 1); return ok("Удалено"); },
-    save_sub: () => ok("Подписка сохранена"), add_key: () => ok("Ключ добавлен"), pick_key: () => ok(""), del_key: () => ok(""),
+    save_sub: () => ok("Подписка сохранена"), save_panel: () => ok("Ссылка на панель сохранена"), add_key: () => ok("Ключ добавлен"), pick_key: () => ok(""), del_key: () => ok(""),
     apply_settings: () => ok("Настройки сохранены"),
     win: () => ok(""), resize: () => ok(""),
   };
@@ -556,6 +561,7 @@ $("#apply").onclick = () => {
     fake_discord: $("#fake_discord").value || null, fake_game: $("#fake_game").value || null};
   call("apply_settings", s);
 };
+$("#panel-save").onclick = () => call("save_panel", $("#panel-in").value.trim()).then(r => { if (r.ok) $("#panel-in").value = ""; });
 $("#sub-save").onclick = () => call("save_sub", $("#sub-in").value.trim()).then(r => { if (r.ok) $("#sub-in").value = ""; });
 $("#key-add").onclick = () => call("add_key", $("#key-in").value.trim()).then(r => { if (r.ok) $("#key-in").value = ""; });
 
@@ -578,7 +584,12 @@ $("#grip").onmousedown = e => {
 function start(a) { api = a; poll(); setInterval(poll, 700); setInterval(() => page === "vpn" && renderVpn(), 5000); }
 if (window.pywebview && window.pywebview.api) start(window.pywebview.api);
 else window.addEventListener("pywebviewready", () => start(window.pywebview.api));
-setTimeout(() => { if (!api) start(demoApi()); }, 600);  // открыт в обычном браузере — демо
+setTimeout(() => {  // открыт в обычном браузере — демо; #vpn, #settings… открывает вкладку
+  if (api) return;
+  start(demoApi());
+  const b = document.querySelector(`.nav-btn[data-p="${location.hash.slice(1)}"]`);
+  if (b) b.click();
+}, 600);
 </script>
 </body>
 </html>
