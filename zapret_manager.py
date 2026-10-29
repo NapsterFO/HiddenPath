@@ -50,6 +50,12 @@ APP_NAME = "HiddenPath"
 APP_TITLE = "Hidden Path"  # заголовок окна; по нему второй запуск находит первый
 TASK = "HiddenPathAutostart"
 
+# обновления самой программы: последний релиз на GitHub, версия — в теге vX.Y
+APP_VERSION = "1.1.0"  # держать равной AppVersion в installer.iss
+APP_REPO = "NapsterFO/HiddenPath"
+APP_SETUP = "HiddenPath-Setup.exe"
+APP_PRIVATE = False
+
 TG_REPO = "Flowseal/tg-ws-proxy"
 TG_API = f"https://api.github.com/repos/{TG_REPO}/releases/latest"
 
@@ -422,6 +428,30 @@ def default_links():
         return []
     lines = (l.strip() for l in f.read_text(encoding="utf-8", errors="ignore").splitlines())
     return [l for l in lines if l.lower().startswith(("vless://", "https://", "http://", "panel:"))]
+
+
+def update_token():
+    """Токен GitHub только на чтение (строка token:… в keys.txt) — для релизов приватного репозитория."""
+    f = Path(getattr(sys, "_MEIPASS", APP_DIR)) / "keys.txt"
+    if not f.exists():
+        return ""
+    for line in f.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if line.strip().lower().startswith("token:"):
+            return line.strip()[6:].strip()
+    return ""
+
+
+def ver_tuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3])
+
+
+def github_get(url, accept="application/vnd.github+json"):
+    """Запрос к API GitHub; токен — только самому GitHub, на редиректах (файлы релиза) он отбрасывается."""
+    req = urllib.request.Request(url, headers={"User-Agent": APP_NAME, "Accept": accept})
+    tok = update_token()
+    if tok:
+        req.add_unredirected_header("Authorization", f"Bearer {tok}")
+    return urlopen(req, timeout=30)
 
 
 def link_id(link):
@@ -1379,6 +1409,9 @@ class Api:
         self._counts = (0, 0)
         self._quitting = False
         self._window = None
+        self._update = None      # {"version", "url", "size"} — есть версия новее
+        self._update_msg = ""    # итог последней проверки для вкладки «Настройки»
+        self._update_told = ""   # о какой версии уже сообщили
 
     # ---------- служебное ----------
     def _add_log(self, m):
@@ -1566,7 +1599,76 @@ class Api:
         self._tray_start()
         threading.Thread(target=self._monitor, daemon=True).start()
         threading.Thread(target=self._heal_autostart, daemon=True).start()
+        threading.Thread(target=self._update_loop, daemon=True).start()
         self._work(self._eng.startup_flow)
+
+    # ---------- обновление самой программы ----------
+    def _update_loop(self):
+        time.sleep(20)  # после запуска обхода, чтобы не мешать подбору стратегии
+        while not self._quitting:
+            self._update_check(quiet=True)
+            time.sleep(6 * 3600)
+
+    def _update_check(self, quiet=False):
+        """Есть ли релиз новее APP_VERSION. quiet — фоновая проверка: без записей в журнал, кроме находки."""
+        stamp = time.strftime("%d.%m %H:%M")
+        if APP_PRIVATE and not update_token():
+            self._update_msg = "Проверка обновлений недоступна: в сборке нет токена GitHub (строка token: в keys.txt)."
+            return
+        try:
+            with github_get(f"https://api.github.com/repos/{APP_REPO}/releases/latest") as r:
+                rel = json.load(r)
+        except urllib.error.HTTPError as ex:
+            if ex.code == 404:
+                self._update_msg = f"{stamp}: релизов пока нет или нет доступа к репозиторию."
+            else:
+                self._update_msg = f"{stamp}: GitHub ответил ошибкой {ex.code}."
+            if not quiet:
+                self._add_log("Обновления: " + self._update_msg)
+            return
+        except Exception as ex:
+            self._update_msg = f"{stamp}: не удалось проверить обновления ({ex})."
+            if not quiet:
+                self._add_log("Обновления: " + self._update_msg)
+            return
+        tag = rel.get("tag_name", "")
+        asset = next((a for a in rel.get("assets", []) if a.get("name") == APP_SETUP), None)
+        if asset and ver_tuple(tag) > ver_tuple(APP_VERSION):
+            ver = tag.lstrip("vV")
+            self._update = {"version": ver, "url": asset["url"], "size": asset.get("size", 0)}
+            self._update_msg = f"{stamp}: вышла версия {ver}."
+            if self._update_told != ver:
+                self._update_told = ver
+                self._add_log(f"Вышло обновление {APP_TITLE} {ver} (установлена {APP_VERSION}). "
+                              "Нажмите «Обновить приложение».")
+                self._notify(f"Вышло обновление {ver}. Откройте программу и нажмите «Обновить приложение».")
+        else:
+            self._update = None
+            self._update_msg = f"{stamp}: у вас последняя версия."
+            if not quiet:
+                self._add_log(f"Обновлений нет: {APP_VERSION} — последняя версия.")
+
+    def _update_install(self):
+        self._status = "Проверяю обновления…"
+        self._update_check()
+        u = self._update
+        if not u:
+            self._status = "Обновлений нет"
+            return
+        self._status = f"Скачиваю версию {u['version']}…"
+        self._add_log(f"Скачиваю {APP_TITLE} {u['version']}…")
+        dst = Path(os.environ.get("TEMP", str(APP_DIR))) / APP_SETUP
+        with github_get(u["url"], accept="application/octet-stream") as r, open(dst, "wb") as f:
+            shutil.copyfileobj(r, f, 1 << 20)
+        if u["size"] and dst.stat().st_size != u["size"]:
+            raise RuntimeError("установщик скачался не полностью, попробуйте ещё раз")
+        self._add_log("Устанавливаю обновление. Программа закроется и запустится заново.")
+        self._status = "Устанавливаю обновление…"
+        # установщик сам вернёт прокси, остановит обход и запустит новую версию
+        subprocess.Popen([str(dst), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"],
+                         creationflags=0x00000008 | 0x00000200, close_fds=True)  # DETACHED | NEW_GROUP
+        time.sleep(1.5)
+        self.action("exit")
 
     def _heal_autostart(self):
         """Автозапуск включён по умолчанию; если задача пропала или ведёт на старый
@@ -1599,6 +1701,8 @@ class Api:
             "sites_n": self._counts[0], "vpn_sites_n": self._counts[1],
             "traffic": f"{used:.1f} ГБ" if "download" in info else "",
             "log": self._log[n:], "log_n": len(self._log),
+            "app": {"version": APP_VERSION, "update": (self._update or {}).get("version", ""),
+                    "msg": self._update_msg},
         }
 
     def sites(self, kind):
@@ -1645,6 +1749,10 @@ class Api:
                 "vless_check": e.vless_check, "ipset_update": e.ipset_update_and_restart}
         if name in jobs:
             return self._ok() if self._work(jobs[name]) else self._busy_msg()
+        if name == "app_check":
+            return self._ok() if self._work(lambda: self._update_check()) else self._busy_msg()
+        if name == "app_update":
+            return self._ok("Обновляю программу…") if self._work(self._update_install) else self._busy_msg()
         if name == "stop":
             e.stop()
             self._running = False

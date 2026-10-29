@@ -22,6 +22,7 @@
 - **Сайты целиком.** К сайту из списка автоматически добавляются его служебные домены: например, к `claude.com` добавляются `claude.ai` и `anthropic.com`, к YouTube его CDN.
 - **Telegram-прокси** [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) для Telegram Desktop.
 - **Удобство:** работает в фоне у часов, запускается вместе с Windows, все настройки `service.bat` вынесены в окно, а zapret и Xray обновляются кнопкой.
+- **Обновления программы.** Hidden Path сам сообщает о новой версии и ставит её кнопкой «Обновить приложение», без ручного скачивания.
 
 <div align="center">
 <img src="docs/vpn.png" width="430" alt="Вкладка «Через VPN»"> <img src="docs/settings.png" width="430" alt="Настройки">

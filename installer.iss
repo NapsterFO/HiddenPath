@@ -8,7 +8,7 @@
 
 #define AppName "Hidden Path"
 #define AppExe "HiddenPath.exe"
-#define AppVersion "1.0.1"
+#define AppVersion "1.1.0"
 #define TaskName "HiddenPathAutostart"
 #define XrayExe "hp-xray.exe"
 
@@ -53,11 +53,13 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Run]
 ; задачу автозапуска создаёт сама программа (правильные настройки: работает
 ; от батареи и без 72-часового лимита) и запоминает выбор в config.json
-Filename: "{app}\{#AppExe}"; Parameters: "--set-autostart on"; Flags: runhidden waituntilterminated runascurrentuser; Tasks: autostart
-Filename: "{app}\{#AppExe}"; Parameters: "--set-autostart off"; Flags: runhidden waituntilterminated runascurrentuser; Tasks: not autostart
+Filename: "{app}\{#AppExe}"; Parameters: "--set-autostart on"; Flags: runhidden waituntilterminated runascurrentuser; Tasks: autostart; Check: not WizardSilent
+Filename: "{app}\{#AppExe}"; Parameters: "--set-autostart off"; Flags: runhidden waituntilterminated runascurrentuser; Tasks: not autostart; Check: not WizardSilent
 ; runascurrentuser: программе нужны права администратора, установщик их уже имеет
 ; (без этого флага Windows отказывает: CreateProcess, код 740)
 Filename: "{app}\{#AppExe}"; Description: "Запустить {#AppName}"; Flags: postinstall nowait skipifsilent runascurrentuser
+; обновление из самой программы (тихая установка): автозапуск не трогаем и сразу запускаем новую версию
+Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: WizardSilent
 
 [UninstallRun]
 Filename: "taskkill.exe"; Parameters: "/F /IM {#AppExe}"; Flags: runhidden; RunOnceId: "KillApp"

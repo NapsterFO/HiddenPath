@@ -62,6 +62,16 @@ nav .spacer { flex: 1; }
 .by b { background: linear-gradient(90deg, var(--cyan), var(--mag)); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 6px rgba(255, 47, 214, .45)); }
 .ver { color: var(--dim); font-size: 11px; padding: 0 10px 10px; line-height: 1.6; }
+/* «вышло обновление» на главной */
+.upd { display: none; align-items: center; gap: 14px; margin-bottom: 16px; padding: 14px 18px; border-radius: 16px;
+  background: linear-gradient(90deg, rgba(31, 224, 164, .16), rgba(34, 228, 255, .1)); border: 1px solid rgba(31, 224, 164, .45);
+  box-shadow: 0 0 18px rgba(31, 224, 164, .18); }
+.upd.on { display: flex; }
+.upd > svg.i { color: var(--green); width: 22px; height: 22px; }
+.upd .t { flex: 1; min-width: 0; } .upd .t small { display: block; color: var(--muted); }
+.btn.green { background: linear-gradient(90deg, #1fe0a4, #17b6d8); box-shadow: 0 0 18px rgba(31, 224, 164, .45); }
+.nav-btn .dot-new { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); margin-left: auto; display: none; }
+.nav-btn.has-upd .dot-new { display: block; }
 
 /* ---------- основная часть ---------- */
 main { overflow-y: auto; overflow-x: hidden; min-width: 0; padding: 24px 28px 28px; position: relative; }
@@ -234,6 +244,7 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
   <symbol id="i-wmin" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-wmax" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></symbol>
   <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></symbol>
 </svg>
 
@@ -252,7 +263,7 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
     <div class="nav-btn on" data-p="home"><svg class="i"><use href="#i-home"/></svg><span>Главная</span></div>
     <div class="nav-btn" data-p="sites"><svg class="i"><use href="#i-globe"/></svg><span>Сайты</span></div>
     <div class="nav-btn" data-p="vpn"><svg class="i"><use href="#i-shield"/></svg><span>Через VPN</span></div>
-    <div class="nav-btn" data-p="settings"><svg class="i"><use href="#i-sliders"/></svg><span>Настройки</span></div>
+    <div class="nav-btn" data-p="settings"><svg class="i"><use href="#i-sliders"/></svg><span>Настройки</span><i class="dot-new"></i></div>
     <div class="nav-btn" data-p="log"><svg class="i"><use href="#i-term"/></svg><span>Журнал</span></div>
     <div class="spacer"></div>
     <div class="by">by <b>Napster</b></div>
@@ -265,6 +276,10 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
     <section class="page on" id="p-home">
       <h1>Панель управления</h1>
       <p class="sub">Обход блокировок zapret и ваш VLESS-сервер для выбранных сайтов</p>
+      <div class="upd" id="upd-bar"><svg class="i"><use href="#i-download"/></svg>
+        <div class="t"><b id="upd-title">Вышло обновление</b><small id="upd-sub"></small></div>
+        <button class="btn green sm act" data-a="app_update"><svg class="i"><use href="#i-download"/></svg>Обновить приложение</button>
+      </div>
       <div class="hero">
         <div class="card gauge-card">
           <div class="gauge" id="gauge">
@@ -398,6 +413,14 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
           <div><label class="f">Game UDP</label><select id="fake_game"></select></div>
         </div>
       </div>
+      <div class="card" style="margin-top:16px">
+        <h3><svg class="i"><use href="#i-download"/></svg>Обновление приложения</h3>
+        <div class="row" style="flex-wrap:wrap">
+          <div style="flex:1;min-width:220px"><b id="app-ver">Версия —</b><div class="hint" id="app-msg" style="margin-top:4px">Проверка ещё не выполнялась</div></div>
+          <button class="btn ghost sm act" data-a="app_check"><svg class="i"><use href="#i-refresh"/></svg>Проверить обновления</button>
+          <button class="btn green sm act" data-a="app_update" id="app-upd-btn"><svg class="i"><use href="#i-download"/></svg>Обновить приложение</button>
+        </div>
+      </div>
       <div style="margin-top:16px;text-align:right"><button class="btn cyan act" id="apply"><svg class="i"><use href="#i-check"/></svg>Применить и перезапустить обход</button></div>
     </section>
 
@@ -417,13 +440,14 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const icon = (n, cls = "i") => `<svg class="${cls}"><use href="#i-${n}"/></svg>`;
-let api = null, S = {}, logN = 0, settings = null;
+let api = null, S = {}, logN = 0, settings = null, toldUpd = "";
 
 // ---------- демо-режим для просмотра в обычном браузере ----------
 function demoApi() {
   const st = {status: "Работает: general (ALT).bat", busy: false, running: true, score: 6, total: 6,
     strategy: "general (ALT).bat", versions: {zapret: "1.10.4", tg: "v1.11.2", xray: "v26.10.21"},
-    autostart: true, tg: false, vless: true, vless_loc: "FI", sites_n: 3, traffic: "458.8 ГБ"};
+    autostart: true, tg: false, vless: true, vless_loc: "FI", sites_n: 3, traffic: "458.8 ГБ",
+    app: {version: "1.1.0", update: "1.1.1", msg: "29.10 13:50: вышла версия 1.1.1."}};
   const log = [["12:40:01", "Запускаю сохранённую стратегию: general (ALT).bat"], ["12:40:06", "Работает (6 из 6)."],
     ["12:40:07", "Подписка обновлена: ключей 1, без изменений."], ["12:40:09", "VLESS включён (my-server). Через сервер: intel.com"],
     ["12:41:30", "Сервер работает: выход в интернет с IP 203.0.113.10 (страна FI)."]];
@@ -491,6 +515,17 @@ function renderHome() {
     ? "Через ваш сервер идёт весь интернет, кроме российских сайтов"
     : "Через ваш сервер идут только сайты из списка, всё остальное — напрямую"; setTg($("#t-tg"), S.tg, S.busy);
   document.querySelectorAll(".act").forEach(b => b.disabled = S.busy);
+  const app = S.app || {};
+  $("#upd-bar").classList.toggle("on", !!app.update);
+  $(".nav-btn[data-p=settings]").classList.toggle("has-upd", !!app.update);
+  if (app.update) {
+    $("#upd-title").textContent = `Вышло обновление ${app.update}`;
+    $("#upd-sub").textContent = `Сейчас установлена версия ${app.version}. Обход и VPN перезапустятся сами`;
+    if (toldUpd !== app.update) { toldUpd = app.update; toast(`Вышло обновление ${app.update}`); }
+  }
+  $("#app-ver").textContent = `Версия ${app.version || "—"}` + (app.update ? ` → доступна ${app.update}` : "");
+  $("#app-msg").textContent = app.msg || "Проверка ещё не выполнялась";
+  $("#app-upd-btn").hidden = !app.update; $("#app-upd-btn").style.display = app.update ? "" : "none";
   const v = S.versions || {};
   $("#ver").innerHTML = `zapret ${esc(v.zapret || "—")}<br>Xray ${esc(v.xray || "—")}` + (v.tg ? `<br>tg-ws-proxy ${esc(v.tg)}` : "");
 }
