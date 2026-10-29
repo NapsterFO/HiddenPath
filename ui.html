@@ -58,6 +58,9 @@ nav { padding: 22px 14px; display: flex; flex-direction: column; gap: 6px; borde
   border-color: rgba(34, 228, 255, .35); box-shadow: inset 3px 0 0 var(--cyan), 0 0 16px rgba(34, 228, 255, .15); }
 .nav-btn.on svg { color: var(--cyan); filter: drop-shadow(0 0 6px var(--cyan)); }
 nav .spacer { flex: 1; }
+.by { padding: 0 10px 8px; font: 600 12px var(--num); letter-spacing: .14em; color: var(--muted); }
+.by b { background: linear-gradient(90deg, var(--cyan), var(--mag)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 6px rgba(255, 47, 214, .45)); }
 .ver { color: var(--dim); font-size: 11px; padding: 0 10px 10px; line-height: 1.6; }
 
 /* ---------- основная часть ---------- */
@@ -197,7 +200,7 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
 @media (max-width: 900px) {
   .hero, .two { grid-template-columns: 1fr; }
   .app { grid-template-columns: 64px 1fr; }
-  nav .nav-btn span, .logo div, .ver { display: none; }
+  nav .nav-btn span, .logo div, .ver, .by { display: none; }
 }
 </style>
 </head>
@@ -252,6 +255,7 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
     <div class="nav-btn" data-p="settings"><svg class="i"><use href="#i-sliders"/></svg><span>Настройки</span></div>
     <div class="nav-btn" data-p="log"><svg class="i"><use href="#i-term"/></svg><span>Журнал</span></div>
     <div class="spacer"></div>
+    <div class="by">by <b>Napster</b></div>
     <div class="ver" id="ver"></div>
     <div class="nav-btn" id="exit"><svg class="i"><use href="#i-power"/></svg><span>Выход</span></div>
   </nav>

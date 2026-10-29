@@ -8,7 +8,7 @@
 
 #define AppName "Hidden Path"
 #define AppExe "HiddenPath.exe"
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 #define TaskName "HiddenPathAutostart"
 #define XrayExe "hp-xray.exe"
 
