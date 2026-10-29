@@ -115,9 +115,10 @@ h1 { font: 700 22px var(--num); letter-spacing: .04em; margin: 0 0 4px; }
   background: rgba(143, 91, 255, .1); color: var(--muted); cursor: pointer; flex: none; }
 .ibtn:hover { color: var(--red); border-color: rgba(255, 77, 109, .5); }
 .row { display: flex; gap: 10px; align-items: center; }
+.row > div { min-width: 0; }  /* колонки с подписью и полем не шире своей доли */
 .row + .row { margin-top: 10px; }
 input[type=text], input[type=password], select {
-  flex: 1; min-width: 0; background: rgba(8, 5, 30, .6); border: 1px solid var(--line2); color: var(--text); border-radius: 12px;
+  flex: 1; min-width: 0; width: 100%; background: rgba(8, 5, 30, .6); border: 1px solid var(--line2); color: var(--text); border-radius: 12px;
   padding: 10px 14px; font: 14px "Segoe UI"; outline: none; transition: .15s; user-select: text; }
 input:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34, 228, 255, .15), 0 0 14px rgba(34, 228, 255, .25); }
 select option { background: #1a1145; }
