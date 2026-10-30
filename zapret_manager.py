@@ -51,7 +51,7 @@ APP_TITLE = "Hidden Path"  # заголовок окна; по нему втор
 TASK = "HiddenPathAutostart"
 
 # обновления самой программы: последний релиз на GitHub, версия — в теге vX.Y
-APP_VERSION = "1.1.0"  # держать равной AppVersion в installer.iss
+APP_VERSION = "1.1.1"  # держать равной AppVersion в installer.iss
 APP_REPO = "NapsterFO/HiddenPath"
 APP_SETUP = "HiddenPath-Setup.exe"
 APP_PRIVATE = False
@@ -125,9 +125,8 @@ def sh(cmd, **kw):
 
 def probe(host, timeout=5):
     try:
-        ctx = ssl.create_default_context()
         with socket.create_connection((host, 443), timeout=timeout) as s:
-            with ctx.wrap_socket(s, server_hostname=host):
+            with SSL_CTX.wrap_socket(s, server_hostname=host):
                 return True
     except Exception:
         return False
@@ -494,22 +493,53 @@ def proxy_set(p):
     inet.InternetSetOptionW(None, 37, None, 0)  # REFRESH
 
 
+def _ssl_context():
+    """Хранилище Windows + набор certifi. Windows докачивает корневые
+    сертификаты только для браузера, и нужного может не оказаться."""
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+        ctx.load_verify_locations(certifi.where())
+    except (ImportError, OSError):
+        pass
+    return ctx
+
+
+SSL_CTX = _ssl_context()
+
+
+def _reraise(e):
+    """Понятная подсказка вместо CERTIFICATE_VERIFY_FAILED, остальное — как есть."""
+    if isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
+        raise urllib.error.URLError(
+            "сертификат сайта не прошёл проверку. Скорее всего, HTTPS перехватывает "
+            "антивирус (проверка защищённых соединений в Kaspersky, ESET и т. п.) "
+            "или другой VPN — добавьте Hidden Path в исключения или выключите его") from e
+    raise e
+
+
 def urlopen(req, timeout=20):
     """Свои запросы — напрямую: системный прокси может указывать на выключенный
     клиент (порт закрыт — WinError 10061). Через него — только запасной путь."""
     try:
         return _DIRECT.open(req, timeout=timeout)
-    except urllib.error.URLError:
+    except urllib.error.URLError as e:
         p = proxy_get()
         if not p["enable"] or not p["server"] or p["server"] == PROXY_ADDR:
-            raise
+            _reraise(e)
         srv = p["server"].split(";")[0].split("=")[-1]
         px = srv if "://" in srv else "http://" + srv
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": px, "https": px}))
-        return opener.open(req, timeout=timeout)
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({"http": px, "https": px}),
+            urllib.request.HTTPSHandler(context=SSL_CTX))
+        try:
+            return opener.open(req, timeout=timeout)
+        except urllib.error.URLError as e2:
+            _reraise(e2)
 
 
-_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+_DIRECT = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=SSL_CTX))
 
 
 def proxy_ours():

@@ -1,12 +1,12 @@
 @echo off
 cd /d "%~dp0"
-python -m pip install --upgrade pyinstaller pywebview pystray pillow
+python -m pip install --upgrade pyinstaller pywebview pystray pillow certifi
 rem публичная сборка: никаких ключей и подписок внутри — пользователь вставляет свои
 if exist keys.txt (
   echo keys.txt must not be in the public build folder - remove it and run again
   goto fail
 )
-python -m PyInstaller --noconfirm --onefile --noconsole --uac-admin --add-data "ui.html;." --add-data "icon.png;." --add-data "icon.ico;." --icon icon.ico --hidden-import pystray._win32 --exclude-module numpy --exclude-module tkinter --name HiddenPath zapret_manager.py
+python -m PyInstaller --noconfirm --onefile --noconsole --uac-admin --add-data "ui.html;." --add-data "icon.png;." --add-data "icon.ico;." --icon icon.ico --hidden-import pystray._win32 --hidden-import certifi --exclude-module numpy --exclude-module tkinter --name HiddenPath zapret_manager.py
 if errorlevel 1 goto fail
 
 set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
