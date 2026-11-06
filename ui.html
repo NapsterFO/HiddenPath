@@ -301,9 +301,9 @@ label.f { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 6
             <div class="actions">
               <button class="btn cyan act" data-a="check"><svg class="i"><use href="#i-play"/></svg>Проверить и запустить</button>
               <button class="btn mag act" data-a="update"><svg class="i"><use href="#i-refresh"/></svg>Обновить</button>
-              <button class="btn red" data-a="stop"><svg class="i"><use href="#i-stop"/></svg>Остановить</button>
             </div>
             <div class="toggles" style="margin-top:8px">
+              <div class="tg" id="t-zap"><svg class="i"><use href="#i-zap"/></svg><div class="t">Обход блокировок (zapret)<small id="zap-sub">YouTube, Discord и сайты из вкладки «Сайты»</small></div><div class="sw"></div></div>
               <div class="tg" id="t-auto"><svg class="i"><use href="#i-boot"/></svg><div class="t">Запускать вместе с Windows<small>Сразу в фоне — значок у часов</small></div><div class="sw"></div></div>
               <div class="tg" id="t-vless"><svg class="i"><use href="#i-shield"/></svg><div class="t">Сайты из списка — через мой сервер<small>Остальной интернет идёт напрямую</small></div><div class="sw"></div></div>
               <div class="tg" id="t-tg"><svg class="i"><use href="#i-send"/></svg><div class="t">Telegram-прокси<small>tg-ws-proxy для Telegram Desktop</small></div><div class="sw"></div></div>
@@ -444,7 +444,7 @@ let api = null, S = {}, logN = 0, settings = null, toldUpd = "";
 
 // ---------- демо-режим для просмотра в обычном браузере ----------
 function demoApi() {
-  const st = {status: "Работает: general (ALT).bat", busy: false, running: true, score: 6, total: 6,
+  const st = {status: "Работает: general (ALT).bat", busy: false, vbusy: false, abusy: false, zapret: true, running: true, score: 6, total: 6,
     strategy: "general (ALT).bat", versions: {zapret: "1.10.4", tg: "v1.11.2", xray: "v26.10.21"},
     autostart: true, tg: false, vless: true, vless_loc: "FI", sites_n: 3, traffic: "458.8 ГБ",
     app: {version: "1.1.0", update: "1.1.1", msg: "29.10 13:50: вышла версия 1.1.1."}};
@@ -486,6 +486,8 @@ function logLine([t, m]) {
   return `<div><span class="tm">${t}</span> <span class="${cls}">${esc(m)}</span></div>`;
 }
 
+const CH = {sub_refresh: "vbusy", vless_check: "vbusy", app_check: "abusy", app_update: "abusy"};
+
 // ---------- опрос состояния ----------
 async function poll() {
   try {
@@ -506,15 +508,20 @@ function renderHome() {
   $("#g-big").textContent = S.busy ? "…" : S.running ? `${S.score}/${S.total}` : "OFF";
   $("#g-lbl").textContent = S.busy ? "работаю" : S.running ? "обход включён" : "обход выключен";
   st.textContent = S.status; st.className = "state " + (S.busy ? "busy" : S.running ? "ok" : "bad");
+  // тумблер не блокируется во время подбора: выключить = остановить подбор
+  setTg($("#t-zap"), S.zapret);
+  $("#zap-sub").textContent = S.busy && S.zapret ? "Подбираю стратегию — VPN при этом работает"
+    : "YouTube, Discord и сайты из вкладки «Сайты»";
   $("#s-strat").textContent = S.strategy || "не выбрана";
   $("#s-vless").textContent = S.vless ? `включён${S.vless_loc ? " · " + S.vless_loc : ""}` : "выключен";
   $("#s-sites").textContent = `${S.sites_n} свои · ${S.vpn_sites_n ?? 0} через VPN`.replace("undefined", "0");
   $("#s-traffic").textContent = S.traffic || "—";
-  setTg($("#t-auto"), S.autostart); setTg($("#t-vless"), S.vless, S.busy); setTg($("#t-vless2"), S.vless, S.busy); setTg($("#t-vall"), S.vless && S.vless_all, S.busy); setTg($("#t-vtun"), S.vless && S.vless_tun, S.busy);
+  setTg($("#t-auto"), S.autostart); setTg($("#t-vless"), S.vless, S.vbusy); setTg($("#t-vless2"), S.vless, S.vbusy); setTg($("#t-vall"), S.vless && S.vless_all, S.vbusy); setTg($("#t-vtun"), S.vless && S.vless_tun, S.vbusy);
   $("#vpn-sub").textContent = S.vless && S.vless_all
     ? "Через ваш сервер идёт весь интернет, кроме российских сайтов"
-    : "Через ваш сервер идут только сайты из списка, всё остальное — напрямую"; setTg($("#t-tg"), S.tg, S.busy);
-  document.querySelectorAll(".act").forEach(b => b.disabled = S.busy);
+    : "Через ваш сервер идут только сайты из списка, всё остальное — напрямую"; setTg($("#t-tg"), S.tg, S.vbusy);
+  // у zapret, VPN и обновления программы свои очереди — кнопки блокируются только своей
+  document.querySelectorAll(".act").forEach(b => b.disabled = !!S[CH[b.dataset.a] || "busy"]);
   const app = S.app || {};
   $("#upd-bar").classList.toggle("on", !!app.update);
   $(".nav-btn[data-p=settings]").classList.toggle("has-upd", !!app.update);
@@ -575,6 +582,7 @@ document.querySelectorAll(".nav-btn[data-p]").forEach(b => b.onclick = () => {
 $("#exit").onclick = () => api.action("exit");
 document.querySelectorAll("[data-a]").forEach(b => b.onclick = () => call("action", b.dataset.a));
 $("#t-auto").onclick = () => call("set_flag", "autostart", !S.autostart);
+$("#t-zap").onclick = () => call("set_flag", "zapret", !S.zapret);
 $("#t-tg").onclick = () => call("set_flag", "tg", !S.tg);
 $("#t-vless").onclick = $("#t-vless2").onclick = () => call("set_flag", "vless", !S.vless);
 $("#t-vall").onclick = () => call("set_flag", "vless_all", !(S.vless && S.vless_all));  // включение заодно включит VLESS

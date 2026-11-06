@@ -51,7 +51,7 @@ APP_TITLE = "Hidden Path"  # заголовок окна; по нему втор
 TASK = "HiddenPathAutostart"
 
 # обновления самой программы: последний релиз на GitHub, версия — в теге vX.Y
-APP_VERSION = "1.1.1"  # держать равной AppVersion в installer.iss
+APP_VERSION = "1.2.0"  # держать равной AppVersion в installer.iss
 APP_REPO = "NapsterFO/HiddenPath"
 APP_SETUP = "HiddenPath-Setup.exe"
 APP_PRIVATE = False
@@ -576,10 +576,20 @@ class Engine:
                 host = parse_domains(panels[0])[0]
                 sites = self.cfg.setdefault("vless_sites", [])
                 sites += [h for h in host if h not in sites]
+        if "zapret_enabled" not in self.cfg:  # до 1.2.0 обход был всегда: включён, если стратегия уже подобрана
+            self.cfg["zapret_enabled"] = bool(self.cfg.get("best"))
+        self.cancel = threading.Event()  # тумблер выключили во время подбора
+        self.zbusy = False  # идёт операция с zapret (выставляет Api)
+        self.request_restart = self.restart  # Api ставит в очередь zapret
+        self._save_lock = threading.Lock()
 
     # ---------- служебное ----------
     def save(self):
-        CONFIG.write_text(json.dumps(self.cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        # zapret и VPN работают в разных потоках — пишем по очереди и целиком
+        with self._save_lock:
+            tmp = CONFIG.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp, CONFIG)
 
     def installed(self):
         return (ZAPRET / "general.bat").exists()
@@ -635,9 +645,14 @@ class Engine:
 
     # ---------- проверка стратегий ----------
     def check_all(self):
+        """Подбор стратегии — только по кнопке «Проверить и запустить» или тумблеру."""
         if not self.installed():
-            self.log("Релиз не установлен — нажмите «Обновить».")
+            self.log("zapret ещё не скачан, скачиваю с GitHub…")
+            self.update(force=True)
+        if self.cancel.is_set():
             return False
+        self.cfg["zapret_enabled"] = True
+        self.save()
         self.set_status("Подбираю стратегию…")
         self.stop()
         time.sleep(1)
@@ -650,21 +665,31 @@ class Engine:
 
         results = []
         for bat in self.strategies():
+            if self.cancel.is_set():
+                break
             self.set_status(f"Проверяю: {bat.name}")
             if not self.start(bat):
                 self.log(f"{bat.name}: winws не запустился")
                 results.append((0, bat))
                 continue
-            time.sleep(WARMUP)
+            if self.cancel.wait(WARMUP):
+                break
             s = self.score()
             self.log(f"{bat.name}: {s} из {len(TARGETS)}")
             results.append((s, bat))
             if s == len(TARGETS):
                 break  # идеальный вариант — дальше не ищем
 
+        if self.cancel.is_set():
+            self.stop()
+            self.log("Подбор стратегии остановлен, обход выключен.")
+            self.set_status("Обход выключен")
+            return False
         s, bat = max(results, key=lambda r: r[0], default=(0, None))
         if bat is None or (s <= base and s < len(TARGETS)):
             self.stop()
+            self.cfg["zapret_enabled"] = False
+            self.save()
             self.log("Ни одна стратегия не помогла. Возможно, блокировка по IP/DNS, "
                      "или нужно обновить релиз.")
             self.set_status("Не удалось разблокировать")
@@ -679,7 +704,10 @@ class Engine:
         return True
 
     def restart(self):
-        """Перезапуск сохранённой стратегии (после смены настроек или списка сайтов)."""
+        """Перезапуск сохранённой стратегии (после смены настроек или списка сайтов).
+        Сам стратегию не подбирает: для этого — «Проверить и запустить»."""
+        if not self.cfg.get("zapret_enabled"):
+            return
         best = self.cfg.get("best")
         if best and (ZAPRET / best).exists():
             self.set_status(f"Перезапускаю: {best}")
@@ -687,7 +715,31 @@ class Engine:
                 self.log("Обход перезапущен с новыми настройками.")
                 self.set_status(f"Работает: {best}")
                 return
-        self.check_all()
+            self.log(f"{best}: winws не запустился. Нажмите «Проверить и запустить», "
+                     "чтобы подобрать стратегию заново.")
+        else:
+            self.log("Стратегия не выбрана. Нажмите «Проверить и запустить».")
+        self.set_status("Обход не запущен")
+
+    def zapret_enable(self):
+        """Тумблер «Обход блокировок»: скачать zapret, если его нет, и запустить
+        сохранённую стратегию. Подбор — только если стратегии ещё нет."""
+        best = self.cfg.get("best")
+        if not self.installed() or not best or not (ZAPRET / best).exists():
+            self.check_all()
+            return
+        self.cfg["zapret_enabled"] = True
+        self.save()
+        self.log(f"Включаю обход: {best}")
+        self.restart()
+
+    def zapret_disable(self):
+        self.cancel.set()  # если идёт подбор — он остановится сам
+        self.cfg["zapret_enabled"] = False
+        self.save()
+        self.stop()
+        self.log("Обход выключен.")
+        self.set_status("Обход выключен")
 
     # ---------- настройки (как в service.bat) ----------
     def settings(self):
@@ -903,7 +955,7 @@ class Engine:
                 self.xray_update()
             except Exception as e:
                 self.log(f"Xray: не удалось обновить: {e}")
-        self.check_all()
+        self.restart()  # update() останавливает winws; без подбора стратегии
 
     # ---------- Telegram (tg-ws-proxy) ----------
     def tg_exe(self):
@@ -1115,8 +1167,9 @@ class Engine:
         self.save()
         if new != cur:
             p.write_text("\n".join(new) + "\n", encoding="utf-8")
-            if winws_running() and self.cfg.get("best"):
-                self.restart()
+            # идёт подбор — новый список подхватит следующая стратегия
+            if winws_running() and self.cfg.get("best") and not self.zbusy:
+                self.request_restart()
 
     def vless_enable(self):
         self.set_status("Подключаю VLESS…")
@@ -1297,8 +1350,8 @@ class Engine:
             if tmp:
                 self.xray_stop()
 
-    # ---------- сценарий при запуске ----------
-    def startup_flow(self):
+    # ---------- сценарий при запуске: VPN и zapret идут параллельно ----------
+    def startup_vpn(self):
         if proxy_ours():
             self.proxy_off()  # остался после сбоя/выключения ПК — Xray сейчас не запущен
         if self.cfg.get("sub_url"):
@@ -1319,32 +1372,35 @@ class Engine:
                 self.tg_start()
             except Exception as e:
                 self.log(f"tg-ws-proxy: {e}")
-        if not self.installed():
-            self.log("Релиз не найден, скачиваю с GitHub…")
-            try:
-                self.update(force=True)
-            except Exception as e:
-                self.log(f"Не удалось скачать: {e}")
-                self.log(f"Можно вручную распаковать релиз в {ZAPRET} "
-                         "(чтобы general.bat лежал прямо в этой папке).")
-                self.set_status("Нет релиза")
-                return
-        else:
-            threading.Thread(target=self._notify_new, daemon=True).start()
 
+    def startup_zapret(self):
+        """Ничего не скачивает и не подбирает: только запускает сохранённую стратегию,
+        если тумблер «Обход блокировок» включён."""
+        if self.installed():
+            threading.Thread(target=self._notify_new, daemon=True).start()
+        if not self.cfg.get("zapret_enabled"):
+            self.set_status("Обход выключен")
+            return
         best = self.cfg.get("best")
-        if best and (ZAPRET / best).exists():
-            self.log(f"Запускаю сохранённую стратегию: {best}")
-            self.set_status(f"Запускаю: {best}")
-            if self.start(ZAPRET / best):
-                time.sleep(WARMUP)
-                s = self.score()
-                if s >= max(1, self.cfg.get("score", 0) - 1):
-                    self.log(f"Работает ({s} из {len(TARGETS)}).")
-                    self.set_status(f"Работает: {best}")
-                    return
-            self.log("Сохранённая стратегия не работает, подбираю заново…")
-        self.check_all()
+        if not self.installed() or not best or not (ZAPRET / best).exists():
+            self.log("Обход включён, но zapret или стратегия не найдены. "
+                     "Нажмите «Проверить и запустить».")
+            self.set_status("Обход не запущен")
+            return
+        self.log(f"Запускаю сохранённую стратегию: {best}")
+        self.set_status(f"Запускаю: {best}")
+        if not self.start(ZAPRET / best):
+            self.log(f"{best}: winws не запустился. Нажмите «Проверить и запустить».")
+            self.set_status("Обход не запущен")
+            return
+        if self.cancel.wait(WARMUP):
+            return
+        s = self.score()
+        self.log(f"Работает ({s} из {len(TARGETS)}).")
+        if s < max(1, self.cfg.get("score", 0) - 1):
+            self.log("Стратегия открывает меньше сайтов, чем раньше. Если что-то не грузится, "
+                     "нажмите «Проверить и запустить», чтобы подобрать заново.")
+        self.set_status(f"Работает: {best}")
 
     def _notify_new(self):
         try:
@@ -1429,10 +1485,13 @@ class Api:
 
     def __init__(self, auto):
         self._log = []
-        self._busy = False
+        # отдельные очереди: пока подбирается стратегия zapret, VPN работает и переключается
+        self._busy = {"zapret": False, "vpn": False, "app": False}
+        self._ch = threading.local()  # в какой очереди работает текущий поток
         self._lock = threading.Lock()
         self._status = "Запуск…"
         self._eng = Engine(self._add_log, self._set_status)
+        self._eng.request_restart = lambda: self._work(self._eng.restart)
         self._auto = auto
         self._autostart = autostart_enabled()
         self._running = False
@@ -1448,6 +1507,9 @@ class Api:
         self._log.append((time.strftime("%H:%M:%S"), m))
 
     def _set_status(self, m):
+        # строка под кольцом — про zapret; VPN не перебивает её во время подбора
+        if getattr(self._ch, "name", "") != "zapret" and self._busy["zapret"]:
+            return
         self._status = m
 
     @staticmethod
@@ -1458,21 +1520,28 @@ class Api:
     def _err(msg):
         return {"ok": False, "msg": msg}
 
-    def _work(self, fn):
+    def _work(self, fn, ch="zapret"):
         with self._lock:
-            if self._busy:
+            if self._busy[ch]:
                 return False
-            self._busy = True
+            self._busy[ch] = True
+            if ch == "zapret":
+                self._eng.zbusy = True
 
         def run():
+            self._ch.name = ch
             try:
                 fn()
             except Exception as e:
                 self._add_log(f"Ошибка: {e}")
-                self._status = "Ошибка"
+                self._set_status("Ошибка")
             finally:
+                if ch == "zapret" and not self._eng.cfg.get("zapret_enabled") and winws_running():
+                    self._eng.stop()  # тумблер выключили, пока стратегия запускалась
                 self._running = winws_running()
-                self._busy = False
+                self._busy[ch] = False
+                if ch == "zapret":
+                    self._eng.zbusy = False
 
         threading.Thread(target=run, daemon=True).start()
         return True
@@ -1488,20 +1557,20 @@ class Api:
             try:
                 self._running = winws_running()
                 self._counts = (len(e.user_sites()), len(e.cfg.get("vless_sites", [])))
-                if not self._busy and e.cfg.get("vless_enabled") and not e.xray_running():
+                if not self._busy["vpn"] and e.cfg.get("vless_enabled") and not e.xray_running():
                     # Xray упал — убираем системный прокси, иначе пропадёт интернет
                     e.proxy_off()
                     e.cfg["vless_enabled"] = False
                     e.save()
                     self._add_log("Xray остановился — VLESS выключен, прокси убран. "
                                   "Включите его снова или нажмите «Проверить сервер».")
-                if time.time() - last_health > 300 and not self._busy:
+                if time.time() - last_health > 300 and not self._busy["vpn"]:
                     last_health = time.time()
                     if e.sub_due():
-                        self._work(e.sub_refresh)
+                        self._work(e.sub_refresh, "vpn")
                     elif e.cfg.get("vless_enabled") and e.xray_running():
                         if e.server_probe() is None and e.server_probe() is None:
-                            self._work(e.vless_heal)
+                            self._work(e.vless_heal, "vpn")
             except Exception as ex:
                 self._add_log(f"Фоновая проверка: {ex}")
             self._tray_refresh()
@@ -1525,7 +1594,8 @@ class Api:
         menu = pystray.Menu(
             M("Открыть Hidden Path", lambda: self._show(), default=True),
             pystray.Menu.SEPARATOR,
-            M("Обход блокировок", lambda: self._tray_bypass(), checked=lambda _: self._running),
+            M("Обход блокировок", lambda: self._tray_bypass(),
+              checked=lambda _: bool(self._eng.cfg.get("zapret_enabled"))),
             M("Сайты через мой сервер", lambda: self._tray_vless(),
               checked=lambda _: bool(self._eng.cfg.get("vless_enabled"))),
             M("Весь интернет через VLESS (кроме RU)", lambda: self._tray_vless_all(),
@@ -1578,14 +1648,9 @@ class Api:
             time.sleep(0.1)
 
     def _tray_bypass(self):
-        if self._busy:
-            return self._notify("Подождите — идёт другая операция.")
-        if self._running:
-            self.action("stop")
-            self._notify("Обход выключен.")
-        else:
-            self._work(self._eng.restart)
-            self._notify("Включаю обход…")
+        on = not self._eng.cfg.get("zapret_enabled")
+        r = self.set_flag("zapret", on)
+        self._notify(r["msg"] if not r["ok"] else ("Включаю обход…" if on else "Обход выключен."))
 
     def _tray_vless(self):
         on = not self._eng.cfg.get("vless_enabled")
@@ -1630,7 +1695,8 @@ class Api:
         threading.Thread(target=self._monitor, daemon=True).start()
         threading.Thread(target=self._heal_autostart, daemon=True).start()
         threading.Thread(target=self._update_loop, daemon=True).start()
-        self._work(self._eng.startup_flow)
+        self._work(self._eng.startup_vpn, "vpn")
+        self._work(self._eng.startup_zapret)
 
     # ---------- обновление самой программы ----------
     def _update_loop(self):
@@ -1720,7 +1786,9 @@ class Api:
         used = (info.get("download", 0) + info.get("upload", 0)) / 1024 ** 3
         n = max(0, int(n or 0))
         return {
-            "status": self._status, "busy": self._busy, "running": self._running,
+            "status": self._status, "busy": self._busy["zapret"], "running": self._running,
+            "vbusy": self._busy["vpn"], "abusy": self._busy["app"],
+            "zapret": bool(c.get("zapret_enabled")),
             "score": c.get("score", len(TARGETS)), "total": len(TARGETS),
             "strategy": c.get("best", ""),
             "versions": {"zapret": c.get("version"), "tg": c.get("tg_version"),
@@ -1775,23 +1843,21 @@ class Api:
     # ---------- действия ----------
     def action(self, name):
         e = self._eng
-        jobs = {"check": e.check_all, "update": e.update_and_check, "sub_refresh": e.sub_refresh,
-                "vless_check": e.vless_check, "ipset_update": e.ipset_update_and_restart}
+        jobs = {"check": (e.check_all, "zapret"), "update": (e.update_and_check, "zapret"),
+                "ipset_update": (e.ipset_update_and_restart, "zapret"),
+                "sub_refresh": (e.sub_refresh, "vpn"), "vless_check": (e.vless_check, "vpn"),
+                "app_check": (lambda: self._update_check(), "app")}
         if name in jobs:
-            return self._ok() if self._work(jobs[name]) else self._busy_msg()
-        if name == "app_check":
-            return self._ok() if self._work(lambda: self._update_check()) else self._busy_msg()
+            if jobs[name][1] == "zapret" and not self._busy["zapret"]:
+                e.cancel.clear()
+            return self._ok() if self._work(*jobs[name]) else self._busy_msg()
         if name == "app_update":
-            return self._ok("Обновляю программу…") if self._work(self._update_install) else self._busy_msg()
+            return self._ok("Обновляю программу…") if self._work(self._update_install, "app") else self._busy_msg()
         if name == "stop":
-            e.stop()
-            self._running = False
-            self._status = "Остановлено"
-            self._add_log("Обход остановлен.")
-            return self._ok("Обход остановлен")
+            return self.set_flag("zapret", False)
         if name == "open_list":
             if not e.installed():
-                return self._err("Релиз ещё не установлен — нажмите «Обновить».")
+                return self._err("zapret ещё не скачан — включите «Обход блокировок» на главной.")
             if not e.user_list().exists():
                 e.save_user_sites([])
             os.startfile(str(e.user_list()))
@@ -1804,6 +1870,7 @@ class Api:
             return self._ok()
         if name == "exit":
             self._quitting = True
+            e.cancel.set()
             e.stop()
             e.tg_stop()
             try:
@@ -1830,8 +1897,17 @@ class Api:
             self._autostart = autostart_enabled()
             self._add_log("Автозапуск " + ("включён." if on else "выключен."))
             return self._ok()
+        if key == "zapret":
+            if not on:  # сразу, даже во время подбора: он увидит отмену и остановится
+                e.zapret_disable()
+                self._running = winws_running()
+                return self._ok("Обход выключен")
+            if self._busy["zapret"]:
+                return self._busy_msg()
+            e.cancel.clear()
+            return self._ok() if self._work(e.zapret_enable) else self._busy_msg()
         if key == "tg":
-            return self._ok() if self._work(e.tg_enable if on else e.tg_disable) else self._busy_msg()
+            return self._ok() if self._work(e.tg_enable if on else e.tg_disable, "vpn") else self._busy_msg()
         if key == "vless":
             if on and not e.cfg.get("vless_link"):
                 return self._err("Сначала добавьте ключ или подписку во вкладке «Через VPN».")
@@ -1845,7 +1921,7 @@ class Api:
                     e.cfg["vless_enabled"] = False
                     e.save()
                     raise
-            return self._ok() if self._work(fn) else self._busy_msg()
+            return self._ok() if self._work(fn, "vpn") else self._busy_msg()
         if key in ("vless_all", "vless_tun"):
             if on and not e.cfg.get("vless_link"):
                 return self._err("Сначала добавьте ключ или подписку во вкладке «Через VPN».")
@@ -1876,13 +1952,13 @@ class Api:
                         e.cfg["vless_enabled"] = False
                         e.save()
                         raise
-            return self._ok() if self._work(fn) else self._busy_msg()
+            return self._ok() if self._work(fn, "vpn") else self._busy_msg()
         return self._err(f"неизвестный флаг {key}")
 
     def add_sites(self, kind, text):
         e = self._eng
         if kind == "zapret" and not e.installed():
-            return self._err("Релиз ещё не установлен — нажмите «Обновить».")
+            return self._err("zapret ещё не скачан — включите «Обход блокировок» на главной.")
         if kind == "apps":  # имена программ: «Telegram», «Telegram.exe», путь к exe
             good, bad = [], []
             for w in re.split(r"[,;\n]+", text or ""):
@@ -1923,12 +1999,12 @@ class Api:
         elif kind == "apps":
             e.cfg["vless_apps"] = sites
             e.save()
-            if e.cfg.get("vless_tun") and e.xray_running() and not self._work(e.vless_apply):
+            if e.cfg.get("vless_tun") and e.xray_running() and not self._work(e.vless_apply, "vpn"):
                 self._add_log("Список применится при следующем запуске VLESS.")
         else:
             e.cfg["vless_sites"] = sites
             e.save()
-            if e.xray_running() and not self._work(e.vless_apply):
+            if e.xray_running() and not self._work(e.vless_apply, "vpn"):
                 self._add_log("Список применится при следующем запуске VLESS.")
 
     def save_panel(self, url):
@@ -1950,7 +2026,7 @@ class Api:
         self._eng.save()
         if not url:
             return self._ok("Подписка убрана")
-        self._work(self._eng.sub_refresh)
+        self._work(self._eng.sub_refresh, "vpn")
         return self._ok("Подписка сохранена, загружаю ключи…")
 
     def _set_active(self, link):
@@ -1959,9 +2035,9 @@ class Api:
         e.save()
         if e.cfg.get("vless_enabled"):
             if link:
-                self._work(e.vless_apply)
+                self._work(e.vless_apply, "vpn")
             else:
-                self._work(e.vless_disable)
+                self._work(e.vless_disable, "vpn")
 
     def add_key(self, link):
         link = (link or "").strip()
@@ -2012,6 +2088,8 @@ class Api:
                  fake_discord=s.get("fake_discord") or None, fake_game=s.get("fake_game") or None)
         self._eng.save()
         self._add_log("Настройки сохранены.")
+        if not c.get("zapret_enabled"):
+            return self._ok("Настройки сохранены. Применятся, когда включите обход.")
         if not self._work(self._eng.restart):
             return self._ok("Сохранено. Применится при следующем запуске обхода.")
         return self._ok("Настройки сохранены, перезапускаю обход…")
