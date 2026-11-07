@@ -93,4 +93,32 @@ build_installer.bat
 
 Готовый установщик появится в `installer\HiddenPath-Setup.exe`.
 
+Установщики в [релизах](https://github.com/NapsterFO/HiddenPath/releases) собираются не на чьём-то компьютере, а на GitHub Actions из кода этого репозитория: [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+## Что программа меняет в системе и куда подключается
+
+**Изменения в системе** (все включаются вами и откатываются при выключении или удалении программы):
+- **Системный прокси Windows** — пока включён VLESS. При выключении и при удалении возвращается прежняя настройка.
+- **Драйвер WinDivert** — его запускает zapret, пока включён «Обход блокировок».
+- **Виртуальный сетевой адаптер** — только в режиме «Программы через VPN».
+- **Задача Планировщика** для запуска вместе с Windows — по галочке в установщике или в программе.
+
+**Сетевые подключения.** Hidden Path не собирает и никуда не отправляет данные о вас и ваших действиях. Сама программа подключается только:
+- к **GitHub** (`api.github.com`, `github.com`, `raw.githubusercontent.com`) — проверить и скачать новые версии самой программы, zapret, Xray, tg-ws-proxy и список IPSet;
+- к **YouTube и Discord** (`www.youtube.com`, `i.ytimg.com`, `redirector.googlevideo.com`, `discord.com`, `gateway.discord.gg`, `cdn.discordapp.com`) — проверить, открываются ли они, когда подбирается стратегия zapret;
+- к **вашей подписке 3x-ui и вашему серверу VLESS**, если вы их указали, и через ваш сервер — к `cloudflare.com`, чтобы показать IP и страну сервера.
+
+Автоматическую проверку обновлений программы делает запрос к GitHub раз в 6 часов. Ничего, кроме обычного запроса к странице релизов, при этом не отправляется.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
+
+- Committers and reviewers: [NapsterFO](https://github.com/NapsterFO)
+- Approvers: [NapsterFO](https://github.com/NapsterFO)
+
+Подписываются только файлы, собранные на GitHub Actions из этого репозитория; каждую подпись вручную одобряет владелец проекта.
+
+Privacy policy: см. раздел [«Что программа меняет в системе и куда подключается»](#что-программа-меняет-в-системе-и-куда-подключается) — там перечислены все подключения программы. Данные о пользователе программа не собирает и не отправляет.
+
 <div align="center"><sub>by <b>Napster</b></sub></div>

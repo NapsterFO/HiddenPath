@@ -3,7 +3,8 @@
 ;
 ; Ставит HiddenPath.exe в Program Files, создаёт ярлыки и (по галочке)
 ; автозапуск при входе в Windows — та же задача Планировщика, что и галочка
-; в самом приложении. Релизы zapret и Xray приложение скачает само при первом запуске.
+; в самом приложении. zapret приложение скачает, когда включат «Обход блокировок»,
+; Xray — при первом включении VLESS.
 ; Удаление останавливает обход, убирает автозапуск и скачанные файлы.
 
 #define AppName "Hidden Path"
@@ -34,6 +35,13 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
+; сведения о файле установщика — те же, что в HiddenPath.exe (tools\version_info.py)
+VersionInfoVersion={#AppVersion}
+VersionInfoProductName={#AppName}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoCompany=NapsterFO
+VersionInfoDescription={#AppName} Setup
+VersionInfoCopyright=Copyright (c) 2026 NapsterFO. MIT License.
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"

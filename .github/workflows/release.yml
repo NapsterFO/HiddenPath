@@ -1,0 +1,123 @@
+# Сборка Hidden Path на GitHub (а не на своём ПК) и установщик в релиз.
+#
+# Запуск: опубликовать релиз vX.Y.Z (gh release create vX.Y.Z --title … --notes …)
+# или вручную во вкладке Actions с номером тега. Версия в теге должна совпадать
+# с APP_VERSION в zapret_manager.py и AppVersion в installer.iss.
+#
+# Подпись SignPath включается сама, когда в настройках репозитория заданы
+# секрет SIGNPATH_API_TOKEN и переменная SIGNPATH_ORGANIZATION_ID (см. docs/SIGNING.md).
+# Без них собирается и выкладывается неподписанный установщик, как раньше.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза, например v1.2.1"
+        required: true
+      publish:
+        description: "Выложить установщик в релиз (выключите для пробной сборки)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write  # выложить установщик в релиз
+  actions: read    # SignPath читает артефакты сборки
+
+jobs:
+  build:
+    runs-on: windows-latest  # SignPath для open source принимает только сборки на машинах GitHub
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # релиз — код из его тега; ручной запуск — из выбранной ветки
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Версия в теге совпадает с кодом
+        shell: pwsh
+        run: |
+          $app = (Select-String -Path zapret_manager.py -Pattern '^APP_VERSION = "([\d.]+)"').Matches[0].Groups[1].Value
+          $iss = (Select-String -Path installer.iss -Pattern '#define AppVersion "([\d.]+)"').Matches[0].Groups[1].Value
+          if ("v$app" -ne $env:TAG -or $app -ne $iss) {
+            throw "Тег $env:TAG, APP_VERSION $app, AppVersion $iss — должны совпадать"
+          }
+
+      - name: Сборка HiddenPath.exe
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+          python tools/build_exe.py
+
+      - name: Неподписанный exe — в артефакт для SignPath
+        if: env.SIGN == 'true'
+        id: exe-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: HiddenPath-exe-unsigned
+          path: dist/HiddenPath.exe
+
+      - name: Подпись HiddenPath.exe (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_EXE_CONFIG }}
+          github-artifact-id: ${{ steps.exe-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600  # каждую подпись одобряют вручную
+          output-artifact-directory: dist
+
+      - name: Установщик (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Неподписанный установщик — в артефакт для SignPath
+        if: env.SIGN == 'true'
+        id: setup-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: HiddenPath-setup-unsigned
+          path: installer/HiddenPath-Setup.exe
+
+      - name: Подпись установщика (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_SETUP_CONFIG }}
+          github-artifact-id: ${{ steps.setup-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: installer
+
+      - name: Установщик — в релиз
+        if: github.event_name == 'release' || inputs.publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Get-FileHash installer/HiddenPath-Setup.exe -Algorithm SHA256 | Format-List
+          gh release upload $env:TAG installer/HiddenPath-Setup.exe --clobber --repo $env:GITHUB_REPOSITORY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HiddenPath-Setup-${{ env.TAG }}
+          path: installer/HiddenPath-Setup.exe
