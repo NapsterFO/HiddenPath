@@ -55,6 +55,7 @@ APP_VERSION = "1.2.1"  # держать равной AppVersion в installer.iss
 APP_REPO = "NapsterFO/HiddenPath"
 APP_SETUP = "HiddenPath-Setup.exe"
 APP_PRIVATE = False
+DONATE_URL = "https://donatepay.ru/don/1541915"  # карточка «Поддержать автора» в настройках
 
 TG_REPO = "Flowseal/tg-ws-proxy"
 TG_API = f"https://api.github.com/repos/{TG_REPO}/releases/latest"
@@ -1896,6 +1897,9 @@ class Api:
             if not re.match(r"^https?://\S+$", url):
                 return self._err("Вставьте ссылку на свою панель 3x-ui в поле ниже.")
             os.startfile(url)
+            return self._ok()
+        if name == "open_donate":  # в браузере по умолчанию, не в окне программы
+            os.startfile(DONATE_URL)
             return self._ok()
         if name == "exit":
             self._quitting = True
