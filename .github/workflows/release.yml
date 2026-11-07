@@ -33,12 +33,12 @@ jobs:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
       SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # релиз — код из его тега; ручной запуск — из выбранной ветки
           ref: ${{ github.event.release.tag_name || github.ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -60,7 +60,7 @@ jobs:
       - name: Неподписанный exe — в артефакт для SignPath
         if: env.SIGN == 'true'
         id: exe-unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: HiddenPath-exe-unsigned
           path: dist/HiddenPath.exe
@@ -89,7 +89,7 @@ jobs:
       - name: Неподписанный установщик — в артефакт для SignPath
         if: env.SIGN == 'true'
         id: setup-unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: HiddenPath-setup-unsigned
           path: installer/HiddenPath-Setup.exe
@@ -117,7 +117,7 @@ jobs:
           Get-FileHash installer/HiddenPath-Setup.exe -Algorithm SHA256 | Format-List
           gh release upload $env:TAG installer/HiddenPath-Setup.exe --clobber --repo $env:GITHUB_REPOSITORY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: HiddenPath-Setup-${{ env.TAG }}
           path: installer/HiddenPath-Setup.exe
