@@ -51,7 +51,7 @@ APP_TITLE = "Hidden Path"  # заголовок окна; по нему втор
 TASK = "HiddenPathAutostart"
 
 # обновления самой программы: последний релиз на GitHub, версия — в теге vX.Y
-APP_VERSION = "1.2.0"  # держать равной AppVersion в installer.iss
+APP_VERSION = "1.2.1"  # держать равной AppVersion в installer.iss
 APP_REPO = "NapsterFO/HiddenPath"
 APP_SETUP = "HiddenPath-Setup.exe"
 APP_PRIVATE = False
@@ -508,34 +508,63 @@ def _ssl_context():
 SSL_CTX = _ssl_context()
 
 
-def _reraise(e):
-    """Понятная подсказка вместо CERTIFICATE_VERIFY_FAILED, остальное — как есть."""
-    if isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
+def _reraise(e, req=None):
+    """Понятная подсказка вместо CERTIFICATE_VERIFY_FAILED и обрыва TLS, остальное — как есть."""
+    reason = getattr(e, "reason", None)
+    if isinstance(reason, ssl.SSLCertVerificationError):
         raise urllib.error.URLError(
             "сертификат сайта не прошёл проверку. Скорее всего, HTTPS перехватывает "
             "антивирус (проверка защищённых соединений в Kaspersky, ESET и т. п.) "
             "или другой VPN — добавьте Hidden Path в исключения или выключите его") from e
+    if isinstance(reason, (ssl.SSLError, ConnectionResetError, ConnectionAbortedError)):
+        host = urllib.parse.urlsplit(req.full_url).hostname if req is not None else "сайтом"
+        raise urllib.error.URLError(
+            f"соединение с {host} обрывается — похоже, его блокирует провайдер. "
+            "Включите VLESS во вкладке «Через VPN»: тогда программа сама пойдёт через ваш сервер") from e
     raise e
+
+
+def _via(px):
+    return urllib.request.build_opener(
+        urllib.request.ProxyHandler({"http": px, "https": px}),
+        urllib.request.HTTPSHandler(context=SSL_CTX))
+
+
+def _port_open(port):
+    with socket.socket() as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def urlopen(req, timeout=20):
     """Свои запросы — напрямую: системный прокси может указывать на выключенный
-    клиент (порт закрыт — WinError 10061). Через него — только запасной путь."""
+    клиент (порт закрыт — WinError 10061). Запасные пути: через свой сервер VLESS
+    (если провайдер режет GitHub и т. п.), потом через чужой системный прокси."""
+    if isinstance(req, str):
+        req = urllib.request.Request(req)
     try:
         return _DIRECT.open(req, timeout=timeout)
+    except urllib.error.HTTPError:
+        raise  # сайт ответил — обходить нечего
     except urllib.error.URLError as e:
-        p = proxy_get()
-        if not p["enable"] or not p["server"] or p["server"] == PROXY_ADDR:
-            _reraise(e)
-        srv = p["server"].split(";")[0].split("=")[-1]
-        px = srv if "://" in srv else "http://" + srv
-        opener = urllib.request.build_opener(
-            urllib.request.ProxyHandler({"http": px, "https": px}),
-            urllib.request.HTTPSHandler(context=SSL_CTX))
+        err = e
+    if _port_open(XRAY_TEST):  # наш Xray запущен: с этого порта всё идёт через сервер
         try:
-            return opener.open(req, timeout=timeout)
-        except urllib.error.URLError as e2:
-            _reraise(e2)
+            return _via(f"http://127.0.0.1:{XRAY_TEST}").open(req, timeout=timeout)
+        except urllib.error.HTTPError:
+            raise
+        except urllib.error.URLError:
+            pass
+    p = proxy_get()
+    if p["enable"] and p["server"] and p["server"] != PROXY_ADDR:
+        srv = p["server"].split(";")[0].split("=")[-1]
+        try:
+            return _via(srv if "://" in srv else "http://" + srv).open(req, timeout=timeout)
+        except urllib.error.HTTPError:
+            raise
+        except urllib.error.URLError:
+            pass
+    _reraise(err, req)
 
 
 _DIRECT = urllib.request.build_opener(
@@ -1723,7 +1752,7 @@ class Api:
                 self._add_log("Обновления: " + self._update_msg)
             return
         except Exception as ex:
-            self._update_msg = f"{stamp}: не удалось проверить обновления ({ex})."
+            self._update_msg = f"{stamp}: не удалось проверить обновления: {getattr(ex, 'reason', ex)}."
             if not quiet:
                 self._add_log("Обновления: " + self._update_msg)
             return
